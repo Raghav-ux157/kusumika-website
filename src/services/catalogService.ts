@@ -167,13 +167,29 @@ export async function submitB2BLead(leadData: {
   notes?: string;
   swatchBinderRequested: boolean;
 }): Promise<string> {
-  const inquiryNumber = `INQ-KSM-${Math.floor(1000 + Math.random() * 9000)}`;
-  const supabase: any = getSupabaseBrowserClient();
+  const fallbackId = `INQ-KSM-${Math.floor(1000 + Math.random() * 9000)}`;
 
+  try {
+    const res = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(leadData),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.inquiryNumber || fallbackId;
+    }
+  } catch (err) {
+    console.warn("Leads endpoint call failed, using fallback:", err);
+  }
+
+  // Graceful browser fallback
+  const supabase: any = getSupabaseBrowserClient();
   if (supabase) {
     try {
       await supabase.from("leads").insert({
-        inquiry_number: inquiryNumber,
+        inquiry_number: fallbackId,
         contact_name: leadData.contactName,
         business_name: leadData.businessName,
         establishment_nature: leadData.establishmentNature,
@@ -197,5 +213,5 @@ export async function submitB2BLead(leadData: {
     }
   }
 
-  return inquiryNumber;
+  return fallbackId;
 }
