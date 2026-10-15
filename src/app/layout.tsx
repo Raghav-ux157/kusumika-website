@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import { GlobalStoreDrawer } from "@/components/layout/GlobalStoreDrawer";
+import { CookieConsentBanner } from "@/components/analytics/CookieConsentBanner";
+import { AnalyticsScripts } from "@/components/analytics/AnalyticsScripts";
 
 export const metadata: Metadata = {
   title: "Kusumika | Soft like Silk, Feels like a Hug",
@@ -51,8 +53,10 @@ export default function RootLayout({
       </head>
       <body className="bg-surface font-sans text-on-surface antialiased min-h-screen flex flex-col">
         <StoreProvider>
+          <AnalyticsScripts />
           {children}
           <GlobalStoreDrawer />
+          <CookieConsentBanner />
         </StoreProvider>
       </body>
     </html>

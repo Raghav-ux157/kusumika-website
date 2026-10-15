@@ -17,11 +17,14 @@ import {
   PartialCodBadge,
   ProductCard,
   BulkQuoteModal,
+  SocialShareButtons,
 } from "@/components/commerce";
 import { Button, Input, Badge } from "@/components/ui";
 import { MOCK_CATALOG, MOCK_REVIEWS } from "@/lib/mockCatalog";
 import { useStore } from "@/context/StoreContext";
 import { formatPrice, cn } from "@/lib/utils";
+import { trackViewItem, trackAddToCart } from "@/lib/analytics/gtag";
+import { metaViewContent, metaAddToCart } from "@/lib/analytics/metaPixel";
 
 const SIZES = [
   { id: "Double / Queen (84x100\")", label: "Double / Queen (84x100\")", dims: "90 x 108 inches" },
@@ -84,6 +87,24 @@ export default function ProductDetailPage({
     },
   ];
 
+  // Dispatch GA4 & Meta Pixel ViewContent event
+  React.useEffect(() => {
+    trackViewItem({
+      item_id: product.id,
+      item_name: product.title,
+      item_category: product.category,
+      price: product.price,
+      quantity: 1,
+    });
+    metaViewContent({
+      item_id: product.id,
+      item_name: product.title,
+      item_category: product.category,
+      price: product.price,
+      quantity: 1,
+    });
+  }, [product]);
+
   // Calculations for Partial COD
   const advanceAmount = product.minAdvanceAmount || 500;
   const balanceDue = product.price * quantity - advanceAmount;
@@ -95,8 +116,27 @@ export default function ProductDetailPage({
     setPincodeMessage(result.message);
   };
 
-  const handleBuyNow = () => {
+  const handleAddToCart = () => {
     addToCart(product, selectedSize, selectedSwatch, quantity);
+    trackAddToCart({
+      item_id: product.id,
+      item_name: product.title,
+      item_category: product.category,
+      price: product.price,
+      quantity,
+      item_variant: selectedSize,
+    });
+    metaAddToCart({
+      item_id: product.id,
+      item_name: product.title,
+      item_category: product.category,
+      price: product.price,
+      quantity,
+    });
+  };
+
+  const handleBuyNow = () => {
+    handleAddToCart();
     router.push("/checkout");
   };
 
@@ -396,7 +436,7 @@ export default function ProductDetailPage({
                       shopping_bag
                     </span>
                   }
-                  onClick={() => addToCart(product, selectedSize, selectedSwatch, quantity)}
+                  onClick={handleAddToCart}
                 >
                   Add to Sanctuary Cart • {formatPrice(product.price * quantity)}
                 </Button>
@@ -482,6 +522,15 @@ export default function ProductDetailPage({
                     <span>{pincodeMessage}</span>
                   </p>
                 )}
+              </div>
+
+              {/* SOCIAL SHARING BUTTONS */}
+              <div className="p-4 rounded-xl bg-surface-container border border-outline-variant/50">
+                <SocialShareButtons
+                  title={product.title}
+                  imageUrl={product.images[0]}
+                  description={product.subtitle}
+                />
               </div>
 
               {/* TACTILE WEAVE METER & PROVENANCE STAMP */}

@@ -6,9 +6,11 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Header, Footer } from "@/components/layout";
 import { Button, Badge, Modal } from "@/components/ui";
+import { SocialShareButtons } from "@/components/commerce";
 import { useStore, PlacedOrder } from "@/context/StoreContext";
 import { formatPrice } from "@/lib/utils";
 import { MOCK_CATALOG } from "@/lib/mockCatalog";
+import { ShiprocketShipment } from "@/types/shipping";
 
 export default function OrderTrackingDetailPage() {
   const params = useParams();
@@ -16,6 +18,8 @@ export default function OrderTrackingDetailPage() {
   const { getOrderById, orders, showToast } = useStore();
 
   const [mapModalOpen, setMapModalOpen] = useState(false);
+  const [liveShipment, setLiveShipment] = useState<ShiprocketShipment | null>(null);
+  const [isLoadingTracking, setIsLoadingTracking] = useState(false);
 
   // Look up order in context or fallback to demo order
   const existingOrder = getOrderById(orderId);
@@ -52,14 +56,35 @@ export default function OrderTrackingDetailPage() {
       estimatedDelivery: "18 Oct 2026",
     };
 
+  React.useEffect(() => {
+    async function loadLiveTracking() {
+      if (!order.trackingNumber) return;
+      setIsLoadingTracking(true);
+      try {
+        const res = await fetch(`/api/shipping/track/${order.trackingNumber}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.shipment) {
+            setLiveShipment(data.shipment);
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch live tracking:", e);
+      } finally {
+        setIsLoadingTracking(false);
+      }
+    }
+    loadLiveTracking();
+  }, [order.trackingNumber]);
+
   const handleCopyAWB = () => {
-    navigator.clipboard.writeText(order.trackingNumber);
-    showToast(`AWB Tracking #${order.trackingNumber} copied.`);
+    const awb = liveShipment?.awbCode || order.trackingNumber;
+    navigator.clipboard.writeText(awb);
+    showToast(`AWB Tracking #${awb} copied.`);
   };
 
   const handleDownloadInvoice = () => {
-    showToast(`Generating GST Tax Invoice for Consignment #${order.orderId}...`);
-    window.print();
+    window.open(`/account/orders/${order.orderId}/invoice`, "_blank");
   };
 
   return (
@@ -185,16 +210,25 @@ export default function OrderTrackingDetailPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setMapModalOpen(true)}
-              className="bg-surface text-primary border border-outline-variant/60 hover:bg-surface-container-high px-4 py-2 rounded-lg font-sans text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
-            >
-              <span className="material-symbols-outlined text-[16px]">
-                map
-              </span>
-              <span>View Route Map</span>
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={handleDownloadInvoice}
+                className="bg-surface text-primary border border-outline-variant/60 hover:bg-surface-container-high px-3.5 py-2 rounded-lg font-sans text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
+                title="View & Print Certified GST Tax Invoice"
+              >
+                <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+                <span>GST Tax Invoice</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapModalOpen(true)}
+                className="bg-primary text-on-primary hover:opacity-90 px-3.5 py-2 rounded-lg font-sans text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 shadow-xs transition-opacity shrink-0"
+              >
+                <span className="material-symbols-outlined text-[16px]">map</span>
+                <span>View Route Map</span>
+              </button>
+            </div>
           </div>
 
           {/* 5-STEP CRAFT TRACKING JOURNEY STEPPER */}
@@ -532,6 +566,14 @@ export default function OrderTrackingDetailPage() {
                 the weave softness, and inspect block-print edges before sharing
                 the delivery OTP or paying the balance amount.
               </p>
+            </div>
+
+            {/* SOCIAL SHARING COMPONENT */}
+            <div className="bg-surface-container-low border border-outline-variant/60 rounded-2xl p-6 shadow-sm">
+              <SocialShareButtons
+                title={`Kusumika Artisanal Handloom Consignment #${order.orderId}`}
+                description="Follow my slow-crafted organic cotton textiles from Sanganer's looms to our home sanctuary."
+              />
             </div>
           </div>
         </div>

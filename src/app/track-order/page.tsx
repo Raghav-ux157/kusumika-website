@@ -13,6 +13,17 @@ export default function TrackOrderPage() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const target = params.get("awb") || params.get("orderId");
+      if (target) {
+        setQuery(target);
+        router.push(`/account/orders/${target}`);
+      }
+    }
+  }, [router]);
+
   const handleTrackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = query.trim().toUpperCase();

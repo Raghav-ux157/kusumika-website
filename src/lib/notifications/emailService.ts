@@ -284,3 +284,145 @@ export async function sendOrderConfirmationEmail(order: OrderConfirmationData): 
 
   return { success: true, simulated: true, messageId: `mock_email_${Date.now()}` };
 }
+
+/**
+ * Dispatch Shipment Dispatched Email with live Shiprocket tracking
+ */
+export async function sendShipmentDispatchedEmail(data: {
+  customerName: string;
+  customerEmail: string;
+  orderNumber: string;
+  courierName: string;
+  awbCode: string;
+  balanceDue: number;
+  trackingUrl: string;
+}): Promise<{ success: boolean; messageId?: string; simulated?: boolean }> {
+  const isCod = data.balanceDue > 0;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0; padding:30px 10px; background-color:#FAF6F0; font-family:'Helvetica Neue', Arial, sans-serif; color:#2D231E;">
+  <div style="max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:16px; overflow:hidden; border:1px solid #E6DED6; box-shadow:0 4px 20px rgba(92,24,26,0.06);">
+    <div style="background:#5C181A; padding:32px 24px; text-align:center; color:#FFFFFF;">
+      <h1 style="margin:0; font-family:Georgia, serif; font-size:26px; letter-spacing:1px;">KUSUMIKA</h1>
+      <p style="margin:4px 0 0 0; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#D4AF37;">Soft like Silk, Feels like a Hug</p>
+    </div>
+    <div style="padding:32px 28px;">
+      <h2 style="font-family:Georgia, serif; color:#5C181A; font-size:22px; margin-top:0;">Your Loom Consignment is Dispatched</h2>
+      <p style="font-size:14px; line-height:1.6; color:#4A3F38;">
+        Namaste <strong>${data.customerName}</strong>,<br/><br/>
+        Your hand-loomed textiles for Order <strong>#${data.orderNumber}</strong> have passed our 400TC quality inspection and have been dispatched via <strong>${data.courierName}</strong>.
+      </p>
+      <div style="background:#FAF6F0; border-radius:12px; padding:20px; margin:24px 0; border:1px solid #E6DED6;">
+        <div style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#7A6960; margin-bottom:4px;">Air Waybill (AWB) Tracking Code</div>
+        <div style="font-size:18px; font-weight:bold; color:#5C181A; font-family:monospace;">${data.awbCode}</div>
+        ${isCod ? `<div style="margin-top:12px; font-size:13px; color:#994534; font-weight:600;">Doorstep Partial COD Balance Due: ₹${data.balanceDue.toLocaleString("en-IN")}</div>` : ""}
+      </div>
+      <div style="text-align:center; margin:32px 0;">
+        <a href="${data.trackingUrl}" style="background:#994534; color:#FFFFFF; text-decoration:none; padding:14px 28px; border-radius:8px; font-weight:bold; font-size:13px; letter-spacing:1px; display:inline-block; text-transform:uppercase;">
+          Track Live Consignment Radar
+        </a>
+      </div>
+      <div style="background:#FFF8F6; border-left:4px solid #994534; padding:14px; border-radius:4px; font-size:12px; color:#5C181A; margin-top:24px;">
+        <strong>Artisan Wax Seal Guarantee:</strong> Please inspect the intact lac wax seal upon delivery before settling any remaining courier balance.
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey && !resendApiKey.includes("mock") && !resendApiKey.includes("your_resend_api_key")) {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || "Kusumika Atelier <orders@kusumika.com>",
+          to: [data.customerEmail],
+          subject: `Dispatched: Order #${data.orderNumber} via ${data.courierName} (AWB: ${data.awbCode})`,
+          html,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return { success: true, messageId: json.id };
+      }
+    } catch (e: any) {
+      console.warn("[EmailService] Resend dispatch failed:", e.message);
+    }
+  }
+
+  console.log(`[EmailService] Simulated dispatch notice to ${data.customerEmail} (AWB: ${data.awbCode})`);
+  return { success: true, simulated: true, messageId: `mock_disp_${Date.now()}` };
+}
+
+/**
+ * Dispatch Abandoned Cart Recovery Email
+ */
+export async function sendAbandonedCartEmail(data: {
+  customerName: string;
+  customerEmail: string;
+  cartTotal: number;
+  itemCount: number;
+  perkCode: string;
+  restoreUrl: string;
+}): Promise<{ success: boolean; messageId?: string; simulated?: boolean }> {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0; padding:30px 10px; background-color:#FAF6F0; font-family:'Helvetica Neue', Arial, sans-serif; color:#2D231E;">
+  <div style="max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:16px; overflow:hidden; border:1px solid #E6DED6;">
+    <div style="background:#5C181A; padding:30px 24px; text-align:center; color:#FFFFFF;">
+      <h1 style="margin:0; font-family:Georgia, serif; font-size:26px;">KUSUMIKA</h1>
+      <p style="margin:4px 0 0 0; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#D4AF37;">Soft like Silk, Feels like a Hug</p>
+    </div>
+    <div style="padding:32px 28px;">
+      <h2 style="font-family:Georgia, serif; color:#5C181A; font-size:22px; margin-top:0;">Your Loom Reservation is Waiting</h2>
+      <p style="font-size:14px; line-height:1.6; color:#4A3F38;">
+        Namaste <strong>${data.customerName}</strong>,<br/><br/>
+        Our master weavers have temporarily reserved your ${data.itemCount} slow-crafted piece${data.itemCount > 1 ? "s" : ""} on our active loom cycle.
+      </p>
+      <div style="background:#FAF6F0; border-radius:12px; padding:20px; margin:24px 0; text-align:center; border:1px dashed #994534;">
+        <span style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#7A6960;">Exclusive Heirloom Courtesy Code</span>
+        <div style="font-size:22px; font-weight:bold; color:#994534; font-family:monospace; margin:6px 0;">${data.perkCode}</div>
+        <span style="font-size:12px; color:#616136;">Enjoy 5% privilege discount + Complimentary Artisan Swatch Binder</span>
+      </div>
+      <div style="text-align:center; margin:28px 0;">
+        <a href="${data.restoreUrl}" style="background:#5C181A; color:#FFFFFF; text-decoration:none; padding:14px 32px; border-radius:8px; font-weight:bold; font-size:13px; letter-spacing:1px; display:inline-block; text-transform:uppercase;">
+          Resume Loom Reservation
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey && !resendApiKey.includes("mock") && !resendApiKey.includes("your_resend_api_key")) {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || "Kusumika Atelier <concierge@kusumika.com>",
+          to: [data.customerEmail],
+          subject: `Your loom reservation is waiting (Code: ${data.perkCode}) - Kusumika`,
+          html,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return { success: true, messageId: json.id };
+      }
+    } catch (e: any) {
+      console.warn("[EmailService] Resend abandoned cart failed:", e.message);
+    }
+  }
+
+  console.log(`[EmailService] Simulated abandoned cart recovery email to ${data.customerEmail}`);
+  return { success: true, simulated: true, messageId: `mock_cart_${Date.now()}` };
+}
+
