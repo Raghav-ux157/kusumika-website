@@ -128,7 +128,7 @@ interface StoreContextType {
     orderDetails: Omit<
       PlacedOrder,
       "orderId" | "date" | "status" | "trackingNumber" | "estimatedDelivery"
-    >
+    > & { orderId?: string; skipDbInsert?: boolean }
   ) => PlacedOrder;
   getOrderById: (orderId: string) => PlacedOrder | undefined;
 
@@ -693,14 +693,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     orderDetails: Omit<
       PlacedOrder,
       "orderId" | "date" | "status" | "trackingNumber" | "estimatedDelivery"
-    >
+    > & { orderId?: string; skipDbInsert?: boolean }
   ): PlacedOrder => {
     const orderNumber = Math.floor(10000 + Math.random() * 90000);
     const trackingSuffix = Math.floor(100000000 + Math.random() * 900000000);
 
     const newOrder: PlacedOrder = {
       ...orderDetails,
-      orderId: `KSM-${orderNumber}`,
+      orderId: orderDetails.orderId || `KSM-${orderNumber}`,
       date: new Intl.DateTimeFormat("en-IN", {
         day: "numeric",
         month: "short",
@@ -716,9 +716,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     clearCart();
     showToast(`Order ${newOrder.orderId} placed successfully!`);
 
-    // Insert order in Supabase if client is active
+    // Insert order in Supabase if client is active and not already inserted by server API
     const supabase: any = getSupabaseBrowserClient();
-    if (supabase) {
+    if (supabase && !orderDetails.skipDbInsert) {
       (async () => {
         try {
           const { data: orderData } = await supabase

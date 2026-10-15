@@ -417,6 +417,47 @@ export interface Database {
           created_at?: string;
         };
       };
+      payments: {
+        Row: {
+          id: string;
+          order_id: string;
+          gateway: "razorpay" | "cash" | "manual_bank";
+          razorpay_order_id: string | null;
+          razorpay_payment_id: string | null;
+          razorpay_signature: string | null;
+          amount: number;
+          status: "pending" | "captured" | "failed" | "refunded";
+          payment_type: "advance" | "balance" | "full";
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          gateway?: "razorpay" | "cash" | "manual_bank";
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          razorpay_signature?: string | null;
+          amount: number;
+          status?: "pending" | "captured" | "failed" | "refunded";
+          payment_type?: "advance" | "balance" | "full";
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          order_id?: string;
+          gateway?: "razorpay" | "cash" | "manual_bank";
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          razorpay_signature?: string | null;
+          amount?: number;
+          status?: "pending" | "captured" | "failed" | "refunded";
+          payment_type?: "advance" | "balance" | "full";
+          metadata?: Json | null;
+          created_at?: string;
+        };
+      };
       cart_items: {
         Row: {
           id: string;

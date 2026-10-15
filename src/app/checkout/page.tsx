@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -29,14 +29,17 @@ const INDIAN_STATES = [
 export default function CheckoutPage() {
   const router = useRouter();
   const {
+    user,
     cart,
     subtotal,
     discount,
     total,
     advancePayable,
     balanceDue,
+    appliedCoupon,
     placeOrder,
     verifiedPincode,
+    showToast,
   } = useStore();
 
   // Form states
@@ -56,6 +59,14 @@ export default function CheckoutPage() {
   const [paymentMode, setPaymentMode] = useState<"partial_cod" | "upi" | "cards" | "netbanking">("partial_cod");
   const [advanceSubmode, setAdvanceSubmode] = useState("upi");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+
+  // Failure & Abandonment Recovery State
+  const [paymentNotice, setPaymentNotice] = useState<{
+    type: "abandoned" | "failed" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
 
   const shippingFee = shippingMethod === "priority" ? 250 : 0;
   const effectiveTotal = total + shippingFee;
@@ -67,13 +78,94 @@ export default function CheckoutPage() {
       ? Math.round((effectiveAdvance / effectiveTotal) * 100)
       : 20;
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (cart.length === 0) return;
+  // Dynamically load Razorpay SDK
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-    setIsPlacingOrder(true);
-    setTimeout(() => {
-      const order = placeOrder({
+    if ((window as any).Razorpay) {
+      setRazorpayLoaded(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => setRazorpayLoaded(true);
+    script.onerror = () => {
+      console.warn("[Razorpay] CDN script could not be loaded; test sandbox simulation available.");
+      setRazorpayLoaded(false);
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      // Cleanup script tag if needed
+    };
+  }, []);
+
+  // Complete Order Verification & Navigation
+  const verifyAndCompleteOrder = async (params: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    isMock: boolean;
+    orderNumber: string;
+  }) => {
+    try {
+      const orderData = {
+        order_number: params.orderNumber,
+        customer_id: user?.id || null,
+        customer_name: formData.name,
+        customer_email: formData.email,
+        customer_phone: `+91 ${formData.phone}`,
+        shipping_address: {
+          address_line1: formData.address,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          landmark: formData.landmark,
+        },
+        items: cart.map((item) => ({
+          product_id: item.product.id,
+          product_title: item.product.title,
+          variant_size: item.selectedSize || "Standard",
+          swatch_name: item.selectedSwatch?.name || null,
+          image_url: item.product.images[0] || null,
+          price: item.product.price,
+          quantity: item.quantity,
+          total: item.product.price * item.quantity,
+        })),
+        subtotal,
+        discount,
+        shipping_fee: shippingFee,
+        total: effectiveTotal,
+        payment_mode: paymentMode,
+        advance_paid: effectiveAdvance,
+        balance_due: effectiveBalanceDue,
+        coupon_code: appliedCoupon?.code || null,
+        notes: `Preservation method: ${shippingMethod === "priority" ? "Priority Haveli Express Air" : "Standard Insured Loom"}`,
+      };
+
+      const verifyRes = await fetch("/api/checkout/verify-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          razorpay_order_id: params.razorpay_order_id,
+          razorpay_payment_id: params.razorpay_payment_id,
+          razorpay_signature: params.razorpay_signature,
+          isMock: params.isMock,
+          orderData,
+        }),
+      });
+
+      const verifyResult = await verifyRes.json();
+
+      if (!verifyRes.ok) {
+        throw new Error(verifyResult.error || "Payment verification failed.");
+      }
+
+      // Synchronize in local StoreContext (skip duplicate DB insert since backend already wrote it)
+      placeOrder({
+        orderId: params.orderNumber,
         customerName: formData.name,
         phone: `+91 ${formData.phone}`,
         email: formData.email,
@@ -89,11 +181,136 @@ export default function CheckoutPage() {
         paymentMode,
         advancePaid: effectiveAdvance,
         balanceDue: effectiveBalanceDue,
+        skipDbInsert: true,
       });
 
+      showToast(`Payment confirmed! Order #${params.orderNumber} is assigned to loom.`);
+      router.push(`/account/orders/${params.orderNumber}`);
+    } catch (err: any) {
+      console.error("[Verification Error]:", err);
       setIsPlacingOrder(false);
-      router.push(`/account/orders/${order.orderId}`);
-    }, 1200);
+      setPaymentNotice({
+        type: "error",
+        title: "Order Finalization Issue",
+        message: err.message || "We could not finalize your loom allocation. Please retry.",
+      });
+    }
+  };
+
+  const handlePlaceOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cart.length === 0) return;
+
+    setIsPlacingOrder(true);
+    setPaymentNotice(null);
+
+    const orderNumber = `KSM-${Math.floor(10000 + Math.random() * 90000)}`;
+    const amountToPayInInr = effectiveAdvance;
+
+    try {
+      // 1. Create Order on Razorpay backend
+      const createOrderRes = await fetch("/api/checkout/create-razorpay-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amountToPayInInr,
+          currency: "INR",
+          receipt: `rcpt_${orderNumber}`,
+          notes: {
+            order_number: orderNumber,
+            customer_name: formData.name,
+            customer_email: formData.email,
+            payment_mode: paymentMode,
+          },
+        }),
+      });
+
+      if (!createOrderRes.ok) {
+        const errorJson = await createOrderRes.json();
+        throw new Error(errorJson.error || "Failed to create payment order with gateway.");
+      }
+
+      const rzpOrder = await createOrderRes.json();
+
+      // 2. If Razorpay client is available on window and not blocked
+      if (typeof window !== "undefined" && (window as any).Razorpay) {
+        const options: any = {
+          key: rzpOrder.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_kusumika_sandbox",
+          amount: rzpOrder.amount,
+          currency: rzpOrder.currency || "INR",
+          name: "Kusumika Luxury Home Textiles",
+          description:
+            paymentMode === "partial_cod"
+              ? `Artisan Loom Advance (${formatPrice(effectiveAdvance)}) for #${orderNumber}`
+              : `Order Reservation #${orderNumber}`,
+          image: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=128&q=80",
+          order_id: rzpOrder.isMock ? undefined : rzpOrder.id,
+          handler: async function (response: any) {
+            await verifyAndCompleteOrder({
+              razorpay_order_id: response.razorpay_order_id || rzpOrder.id,
+              razorpay_payment_id: response.razorpay_payment_id || `pay_test_${Date.now()}`,
+              razorpay_signature: response.razorpay_signature || "simulated_valid_signature",
+              isMock: rzpOrder.isMock,
+              orderNumber,
+            });
+          },
+          prefill: {
+            name: formData.name,
+            email: formData.email,
+            contact: formData.phone.startsWith("+91") ? formData.phone : `+91${formData.phone}`,
+          },
+          theme: {
+            color: "#5C181A", // Kusumika Heirloom Maroon
+          },
+          modal: {
+            ondismiss: function () {
+              setIsPlacingOrder(false);
+              setPaymentNotice({
+                type: "abandoned",
+                title: "Loom Reservation Paused",
+                message:
+                  "You closed the payment modal before completing your reservation. Your cart and shipping details are safe. You can resume anytime.",
+              });
+            },
+          },
+        };
+
+        const razorpayInstance = new (window as any).Razorpay(options);
+
+        razorpayInstance.on("payment.failed", function (response: any) {
+          setIsPlacingOrder(false);
+          setPaymentNotice({
+            type: "failed",
+            title: "Payment Unsuccessful",
+            message:
+              response?.error?.description ||
+              "Your bank or payment application declined the transaction. Please try another card or UPI app, or use Partial COD.",
+          });
+        });
+
+        razorpayInstance.open();
+      } else {
+        // Fallback: Sandbox local simulation when Razorpay CDN is offline or blocked
+        console.warn("[Razorpay] Executing seamless test sandbox simulation...");
+        setTimeout(async () => {
+          await verifyAndCompleteOrder({
+            razorpay_order_id: rzpOrder.id,
+            razorpay_payment_id: `pay_sandbox_${Date.now()}`,
+            razorpay_signature: "sandbox_simulated_sig",
+            isMock: true,
+            orderNumber,
+          });
+        }, 1200);
+      }
+    } catch (err: any) {
+      console.error("[Checkout Initiation Error]:", err);
+      setIsPlacingOrder(false);
+      setPaymentNotice({
+        type: "error",
+        title: "Payment Gateway Offline",
+        message: err.message || "Could not reach the payment gateway. Please verify your connection.",
+      });
+    }
   };
 
   if (cart.length === 0) {
@@ -133,7 +350,7 @@ export default function CheckoutPage() {
           <div className="border-b border-outline-variant/40 pb-4 flex items-center justify-between">
             <div className="space-y-1">
               <span className="font-sans text-xs uppercase tracking-widest text-secondary font-bold">
-                Secure Reservation
+                Secure Reservation & Loom Allocation
               </span>
               <h1 className="font-serif text-3xl sm:text-4xl text-primary font-normal">
                 Checkout & Loom Allocation
@@ -146,6 +363,64 @@ export default function CheckoutPage() {
               ← Edit Cart
             </Link>
           </div>
+
+          {/* Payment Notice / Failure / Abandonment Banner */}
+          {paymentNotice && (
+            <div
+              className={cn(
+                "p-4 sm:p-5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300",
+                paymentNotice.type === "abandoned"
+                  ? "bg-amber-50/90 border-amber-200 text-amber-950"
+                  : "bg-red-50/90 border-red-200 text-red-950"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={cn(
+                    "material-symbols-outlined text-[24px] shrink-0 mt-0.5",
+                    paymentNotice.type === "abandoned" ? "text-amber-700" : "text-red-700"
+                  )}
+                >
+                  {paymentNotice.type === "abandoned" ? "hourglass_pause" : "error"}
+                </span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-serif font-bold text-base">
+                      {paymentNotice.title}
+                    </h4>
+                    <span className="text-[10px] uppercase font-sans font-bold px-2 py-0.5 rounded bg-white/80 border border-current/20">
+                      Cart & Details Preserved
+                    </span>
+                  </div>
+                  <p className="font-sans text-xs opacity-90 max-w-2xl leading-relaxed">
+                    {paymentNotice.message}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-center">
+                {paymentMode !== "partial_cod" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMode("partial_cod");
+                      setPaymentNotice(null);
+                    }}
+                    className="text-xs font-sans font-semibold bg-white border border-outline-variant/60 hover:bg-surface px-3 py-1.5 rounded-lg shadow-sm text-primary"
+                  >
+                    Switch to Partial COD
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPaymentNotice(null)}
+                  className="text-xs font-sans font-medium text-outline hover:text-primary px-2 py-1.5"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handlePlaceOrder}>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
@@ -378,13 +653,13 @@ export default function CheckoutPage() {
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                                 <div className="p-3 rounded-lg bg-surface border border-outline-variant/40 space-y-1">
                                   <span className="font-sans text-[10px] uppercase tracking-wider text-secondary font-bold">
-                                    Payable Now Online
+                                    Payable Now Online (Advance)
                                   </span>
                                   <div className="font-serif text-2xl text-secondary font-bold">
                                     {formatPrice(effectiveAdvance)}
                                   </div>
                                   <p className="font-sans text-[11px] text-outline">
-                                    Confirms weaving & courier dispatch
+                                    Locks artisan loom & triggers weaving
                                   </p>
                                 </div>
 
@@ -396,7 +671,7 @@ export default function CheckoutPage() {
                                     {formatPrice(effectiveBalanceDue)}
                                   </div>
                                   <p className="font-sans text-[11px] text-outline">
-                                    Pay via UPI QR or Cash to delivery agent
+                                    Pay via UPI QR or Cash to delivery executive
                                   </p>
                                 </div>
                               </div>
@@ -407,7 +682,7 @@ export default function CheckoutPage() {
                                   verified_user
                                 </span>
                                 <p className="leading-relaxed">
-                                  <strong>Doorstep Inspection Guarantee:</strong> You will receive an SMS and WhatsApp OTP before courier delivery. You are warmly invited to inspect the intact <strong className="text-primary font-semibold">Kusumika Artisan Wax Seal</strong> and touch the organic weave before completing the balance payment.
+                                  <strong>Zero-Risk Doorstep Inspection:</strong> You will receive an SMS and WhatsApp OTP before courier delivery. You are warmly invited to inspect the intact <strong className="text-primary font-semibold">Kusumika Artisan Wax Seal</strong> and feel the organic cotton weave before completing the balance payment.
                                 </p>
                               </div>
 
@@ -470,10 +745,10 @@ export default function CheckoutPage() {
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-serif text-lg text-primary font-medium">
-                              Instant UPI Transfer
+                              Instant UPI Transfer (Full Prepaid)
                             </span>
                             <span className="bg-tertiary text-surface text-[10px] font-sans uppercase font-bold px-2 py-0.5 rounded">
-                              Extra 2% Instant Off
+                              Fast Track Dispatch
                             </span>
                           </div>
                           <p className="font-sans text-xs text-on-surface-variant">
@@ -504,7 +779,7 @@ export default function CheckoutPage() {
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-serif text-lg text-primary font-medium">
-                              Credit & Debit Cards
+                              Credit & Debit Cards (Full Prepaid)
                             </span>
                             <span className="text-[10px] font-sans text-outline uppercase font-semibold">
                               Visa • MC • RuPay • Amex
@@ -595,7 +870,7 @@ export default function CheckoutPage() {
 
                     {discount > 0 && (
                       <div className="flex justify-between text-secondary font-semibold">
-                        <span>Privilege Voucher</span>
+                        <span>Privilege Voucher {appliedCoupon ? `(${appliedCoupon.code})` : ""}</span>
                         <span>−{formatPrice(discount)}</span>
                       </div>
                     )}
