@@ -1,0 +1,170 @@
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Stitch Atelier Heritage tokens
+        surface: {
+          DEFAULT: "#fff8f6",
+          dim: "#e7d7d2",
+          bright: "#fff8f6",
+          lowest: "#ffffff",
+          low: "#fff1ec",
+          container: "#fbeae5",
+          high: "#f5e5e0",
+          highest: "#f0dfda",
+          variant: "#f0dfda",
+          tint: "#984543",
+        },
+        "surface-dim": "#e7d7d2",
+        "surface-bright": "#fff8f6",
+        "surface-container-lowest": "#ffffff",
+        "surface-container-low": "#fff1ec",
+        "surface-container": "#fbeae5",
+        "surface-container-high": "#f5e5e0",
+        "surface-container-highest": "#f0dfda",
+        "surface-variant": "#f0dfda",
+        "surface-tint": "#984543",
+
+        "on-surface": "#221a17",
+        "on-surface-variant": "#544241",
+        "on-background": "#221a17",
+        background: "#fff8f6",
+        "inverse-surface": "#382e2b",
+        "inverse-on-surface": "#feede8",
+
+        primary: {
+          DEFAULT: "#5c181a",
+          container: "#7a2e2e",
+          fixed: "#ffdad8",
+          "fixed-dim": "#ffb3b0",
+        },
+        "primary-container": "#7a2e2e",
+        "on-primary": "#ffffff",
+        "on-primary-container": "#ff9a96",
+        "inverse-primary": "#ffb3b0",
+        "primary-fixed": "#ffdad8",
+        "primary-fixed-dim": "#ffb3b0",
+        "on-primary-fixed": "#3f0207",
+        "on-primary-fixed-variant": "#7a2e2e",
+
+        secondary: {
+          DEFAULT: "#994534",
+          container: "#fe947e",
+          fixed: "#ffdad3",
+          "fixed-dim": "#ffb4a5",
+        },
+        "secondary-container": "#fe947e",
+        "on-secondary": "#ffffff",
+        "on-secondary-container": "#762b1c",
+        "secondary-fixed": "#ffdad3",
+        "secondary-fixed-dim": "#ffb4a5",
+        "on-secondary-fixed": "#3f0400",
+        "on-secondary-fixed-variant": "#7b2e1f",
+
+        tertiary: {
+          DEFAULT: "#616136",
+          container: "#afae7c",
+          fixed: "#e7e5af",
+          "fixed-dim": "#cac995",
+        },
+        "tertiary-container": "#afae7c",
+        "on-tertiary": "#ffffff",
+        "on-tertiary-container": "#41421a",
+        "tertiary-fixed": "#e7e5af",
+        "tertiary-fixed-dim": "#cac995",
+        "on-tertiary-fixed": "#1d1d00",
+        "on-tertiary-fixed-variant": "#494920",
+
+        outline: "#877271",
+        "outline-variant": "#dac1bf",
+        "border-subtle": "#e3d3c1",
+
+        error: {
+          DEFAULT: "#ba1a1a",
+          container: "#ffdad6",
+        },
+        "on-error": "#ffffff",
+        "error-container": "#ffdad6",
+        "on-error-container": "#93000a",
+
+        // Semantic Brand Aliases
+        brand: {
+          maroon: "#7a2e2e",
+          "maroon-dark": "#5c181a",
+          terracotta: "#b85c4a",
+          "terracotta-dark": "#994534",
+          olive: "#6b6b3f",
+          "olive-dark": "#616136",
+          gold: "#c9a24d",
+          cream: "#f3e9dc",
+          "cream-light": "#fbeae5",
+          ivory: "#faf6f0",
+          charcoal: "#2d2421",
+          sand: "#8a7f76",
+          border: "#e3d3c1",
+        },
+      },
+      fontFamily: {
+        serif: ["'EB Garamond'", "Georgia", "serif"],
+        sans: ["'Manrope'", "system-ui", "-apple-system", "sans-serif"],
+        headline: ["'EB Garamond'", "Georgia", "serif"],
+        body: ["'Manrope'", "system-ui", "sans-serif"],
+        "display-lg": ["'EB Garamond'", "Georgia", "serif"],
+        "headline-xl": ["'EB Garamond'", "Georgia", "serif"],
+        "headline-lg": ["'EB Garamond'", "Georgia", "serif"],
+        "headline-md": ["'EB Garamond'", "Georgia", "serif"],
+        "headline-sm": ["'EB Garamond'", "Georgia", "serif"],
+        "body-lg": ["'Manrope'", "sans-serif"],
+        "body-md": ["'Manrope'", "sans-serif"],
+        "body-sm": ["'Manrope'", "sans-serif"],
+        "label-lg": ["'Manrope'", "sans-serif"],
+        "label-md": ["'Manrope'", "sans-serif"],
+        "label-sm": ["'Manrope'", "sans-serif"],
+      },
+      spacing: {
+        "space-xs": "0.25rem",
+        "space-sm": "0.5rem",
+        "space-md": "1rem",
+        "space-lg": "1.5rem",
+        "space-xl": "2.5rem",
+        "space-2xl": "4rem",
+        "space-3xl": "6rem",
+        margin: "3rem",
+        "margin-mobile": "1.25rem",
+        gutter: "1.5rem",
+        "gutter-mobile": "1rem",
+      },
+      borderRadius: {
+        DEFAULT: "0.25rem",
+        sm: "0.125rem",
+        md: "0.375rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        "2xl": "1rem",
+        full: "9999px",
+        "arch-card": "5rem 5rem 0.5rem 0.5rem",
+        "arch-hero": "280px 280px 1rem 1rem",
+      },
+      boxShadow: {
+        terracotta:
+          "0 4px 20px -2px rgba(45, 36, 33, 0.05), 0 2px 6px -1px rgba(122, 46, 46, 0.04)",
+        "elevation-1":
+          "0 4px 20px -2px rgba(45, 36, 33, 0.05), 0 2px 6px -1px rgba(122, 46, 46, 0.03)",
+        "elevation-2":
+          "0 16px 40px -4px rgba(45, 36, 33, 0.08), 0 4px 12px -2px rgba(122, 46, 46, 0.04)",
+        jharokha:
+          "0 20px 45px -10px rgba(92, 24, 26, 0.15), 0 8px 16px -4px rgba(45, 36, 33, 0.06)",
+      },
+    },
+  },
+  plugins: [],
+};
+
+export default config;
