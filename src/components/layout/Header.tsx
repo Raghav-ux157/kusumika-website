@@ -2,17 +2,19 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BrandLogo } from "../brand/BrandLogo";
 import { Drawer } from "../ui/Drawer";
 import { NavigationItem } from "@/types";
 import { cn } from "@/lib/utils";
+import { useStore } from "@/context/StoreContext";
 
 const NAV_ITEMS: NavigationItem[] = [
-  { label: "Bedsheets & Linens", href: "/collections/bedsheets", path: "bedsheets-linens" },
-  { label: "Throws & Quilts", href: "/collections/quilts", path: "throws-quilts" },
-  { label: "Towels & Bath", href: "/collections/bath", path: "towels-bath" },
-  { label: "Cushions & Decor", href: "/collections/decor", path: "cushions-decor" },
-  { label: "Festive Edit", href: "/collections/festive", path: "festive-edit", badge: "New" },
+  { label: "Bedsheets & Linens", href: "/collections/bedsheets-linens", path: "bedsheets-linens" },
+  { label: "Throws & Quilts", href: "/collections/throws-quilts", path: "throws-quilts" },
+  { label: "Towels & Bath", href: "/collections/towels-bath", path: "towels-bath" },
+  { label: "Cushions & Decor", href: "/collections/cushions-decor", path: "cushions-decor" },
+  { label: "Festive Edit", href: "/collections/festive-edit", path: "festive-edit", badge: "New" },
   { label: "Business & Bulk", href: "/bulk-enquiry", path: "bulk-hospitality", isSpecial: true },
 ];
 
@@ -25,14 +27,48 @@ export interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  cartCount = 2,
-  wishlistCount = 3,
+  cartCount,
+  wishlistCount,
   onOpenCart,
   onOpenWishlist,
   onOpenSearch,
 }) => {
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  let storeContext: ReturnType<typeof useStore> | undefined;
+  try {
+    storeContext = useStore();
+  } catch {
+    // rendered outside provider
+  }
+
+  const effectiveCartCount =
+    cartCount !== undefined
+      ? cartCount
+      : storeContext
+      ? storeContext.cart.reduce((sum, item) => sum + item.quantity, 0)
+      : 0;
+
+  const effectiveWishlistCount =
+    wishlistCount !== undefined
+      ? wishlistCount
+      : storeContext
+      ? storeContext.wishlist.length
+      : 0;
+
+  const handleOpenCart =
+    onOpenCart || (() => storeContext?.setIsCartDrawerOpen(true));
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setSearchOpen(false);
+    setMobileMenuOpen(false);
+    router.push(`/collections?search=${encodeURIComponent(searchQuery.trim())}`);
+  };
 
   return (
     <header className="sticky top-0 w-full z-40 shadow-[0_1px_8px_rgba(45,36,33,0.04)] select-none">
@@ -105,7 +141,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Search Button */}
             <button
               type="button"
-              onClick={onOpenSearch}
+              onClick={() => (onOpenSearch ? onOpenSearch() : setSearchOpen(!searchOpen))}
               className="p-2 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center rounded-full hover:bg-surface-container"
               aria-label="Search collection"
             >
@@ -125,9 +161,9 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="View Wishlist"
             >
               <span className="material-symbols-outlined text-[22px]">favorite</span>
-              {wishlistCount > 0 && (
+              {effectiveWishlistCount > 0 && (
                 <span className="absolute top-1 right-1 h-4 min-w-[16px] px-1 rounded-full bg-secondary text-surface font-sans text-[10px] leading-4 text-center font-bold">
-                  {wishlistCount}
+                  {effectiveWishlistCount}
                 </span>
               )}
             </Link>
@@ -135,14 +171,14 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Cart Trigger */}
             <button
               type="button"
-              onClick={onOpenCart}
+              onClick={handleOpenCart}
               className="relative p-2 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center rounded-full hover:bg-surface-container"
               aria-label="View Cart"
             >
               <span className="material-symbols-outlined text-[22px]">shopping_bag</span>
-              {cartCount > 0 && (
+              {effectiveCartCount > 0 && (
                 <span className="absolute top-1 right-1 h-4 min-w-[16px] px-1 rounded-full bg-primary-container text-surface font-sans text-[10px] leading-4 text-center font-bold">
-                  {cartCount}
+                  {effectiveCartCount}
                 </span>
               )}
             </button>
@@ -157,6 +193,34 @@ export const Header: React.FC<HeaderProps> = ({
             </Link>
           </div>
         </div>
+
+        {/* Dropdown Desktop Search Bar */}
+        {searchOpen && (
+          <form
+            onSubmit={handleSearchSubmit}
+            className="absolute left-0 right-0 top-full bg-surface-container border-b border-outline-variant p-4 shadow-lg animate-in slide-in-from-top-2"
+          >
+            <div className="max-w-[700px] mx-auto relative flex items-center">
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search bedsheets, dohars, towels, waffle weave, 400TC..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg bg-surface border border-outline-variant px-4 py-3 pl-11 text-sm font-sans text-on-surface placeholder:text-outline focus:outline-none focus:border-primary-container"
+              />
+              <span className="material-symbols-outlined text-outline absolute left-3.5 text-[22px]">
+                search
+              </span>
+              <button
+                type="submit"
+                className="absolute right-2 px-4 py-1.5 bg-primary text-surface rounded text-xs font-sans uppercase font-bold tracking-wider hover:bg-secondary transition-colors"
+              >
+                Search
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* 3. MOBILE NAVIGATION DRAWER */}
@@ -170,7 +234,7 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <div className="flex flex-col gap-6 py-2">
           {/* Quick Search */}
-          <div className="relative">
+          <form onSubmit={handleSearchSubmit} className="relative">
             <input
               type="text"
               placeholder="Search bedsheets, dohars, towels..."
@@ -181,7 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="material-symbols-outlined text-outline absolute left-3 top-3 text-[18px]">
               search
             </span>
-          </div>
+          </form>
 
           {/* Navigation Category Links */}
           <nav className="flex flex-col divide-y divide-outline-variant/30">

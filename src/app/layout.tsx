@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { StoreProvider } from "@/context/StoreContext";
+import { GlobalStoreDrawer } from "@/components/layout/GlobalStoreDrawer";
 
 export const metadata: Metadata = {
   title: "Kusumika | Soft like Silk, Feels like a Hug",
@@ -48,7 +50,10 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-surface font-sans text-on-surface antialiased min-h-screen flex flex-col">
-        {children}
+        <StoreProvider>
+          {children}
+          <GlobalStoreDrawer />
+        </StoreProvider>
       </body>
     </html>
   );
