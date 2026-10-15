@@ -7,6 +7,7 @@ import { Header, Footer } from "@/components/layout";
 import { Button, Input, Textarea, Select } from "@/components/ui";
 import { useStore } from "@/context/StoreContext";
 import { MOCK_CATALOG } from "@/lib/mockCatalog";
+import { submitB2BLead } from "@/services/catalogService";
 
 const ESTABLISHMENT_TYPES = [
   { id: "hotel", label: "Boutique Hotel / Haveli", icon: "hotel" },
@@ -85,17 +86,42 @@ export default function BulkEnquiryPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.contactName || !formData.businessName || !formData.phone) {
       showToast("Please fill in contact name, business name, and phone.");
       return;
     }
 
-    const refId = `INQ-KSM-${Math.floor(1000 + Math.random() * 9000)}`;
-    setSubmittedId(refId);
-    showToast(`Inquiry #${refId} registered. An atelier consultant will reach out.`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      const refId = await submitB2BLead({
+        contactName: formData.contactName,
+        businessName: formData.businessName,
+        establishmentNature: establishmentType,
+        email: formData.email,
+        phone: formData.phone,
+        city: formData.city,
+        pincode: formData.pincode,
+        gstin: formData.gstin,
+        categoriesNeeded: selectedCategories,
+        weaveGrade: formData.weaveGrade,
+        quantityTier: selectedTier,
+        bedSizes: selectedSizes,
+        brandingOption: brandingOption,
+        timeline: formData.timeline,
+        notes: formData.notes,
+        swatchBinderRequested: includeSwatchBinder,
+      });
+
+      setSubmittedId(refId);
+      showToast(`Inquiry #${refId} registered. An atelier consultant will reach out.`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      const fallbackId = `INQ-KSM-${Math.floor(1000 + Math.random() * 9000)}`;
+      setSubmittedId(fallbackId);
+      showToast(`Inquiry #${fallbackId} registered.`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   return (

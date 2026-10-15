@@ -3,6 +3,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product, ProductVariant, ProductSwatch } from "@/types";
 import { MOCK_CATALOG } from "@/lib/mockCatalog";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchProducts } from "@/services/catalogService";
+import { AuthModal } from "@/components/auth/AuthModal";
 
 export interface CartItem {
   cartItemId: string;
@@ -38,12 +41,40 @@ export interface PlacedOrder {
   paymentMode: "partial_cod" | "upi" | "cards" | "netbanking";
   advancePaid: number;
   balanceDue: number;
-  status: "Order Placed" | "Loom Assigned" | "Natural Dyeing" | "Quality Inspected" | "Shipped" | "Out for Delivery" | "Delivered";
+  status:
+    | "Order Placed"
+    | "Loom Assigned"
+    | "Natural Dyeing"
+    | "Quality Inspected"
+    | "Shipped"
+    | "Out for Delivery"
+    | "Delivered";
   trackingNumber: string;
   estimatedDelivery: string;
 }
 
+export interface CustomerProfile {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  loyaltyPoints: number;
+  loyaltyTier: string;
+  role: string;
+}
+
 interface StoreContextType {
+  // Auth state
+  user: any | null;
+  customerProfile: CustomerProfile | null;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  signOut: () => Promise<void>;
+
+  // Catalog
+  products: Product[];
+
+  // Cart
   cart: CartItem[];
   addToCart: (
     product: Product,
@@ -57,15 +88,18 @@ interface StoreContextType {
   isCartDrawerOpen: boolean;
   setIsCartDrawerOpen: (open: boolean) => void;
 
+  // Wishlist
   wishlist: string[];
   toggleWishlist: (product: Product) => void;
   isInWishlist: (productId: string) => boolean;
 
+  // Coupons
   appliedCoupon: Coupon | null;
   couponError: string | null;
   applyCoupon: (code: string) => boolean;
   removeCoupon: () => void;
 
+  // Pincode & Delivery
   verifiedPincode: {
     pincode: string;
     city: string;
@@ -80,6 +114,7 @@ interface StoreContextType {
     message: string;
   };
 
+  // Pricing & Partial COD
   subtotal: number;
   discount: number;
   shippingFee: number;
@@ -87,6 +122,7 @@ interface StoreContextType {
   advancePayable: number;
   balanceDue: number;
 
+  // Orders
   orders: PlacedOrder[];
   placeOrder: (
     orderDetails: Omit<
@@ -96,6 +132,7 @@ interface StoreContextType {
   ) => PlacedOrder;
   getOrderById: (orderId: string) => PlacedOrder | undefined;
 
+  // UI Toast
   toastMessage: string | null;
   showToast: (msg: string) => void;
 }
@@ -161,9 +198,28 @@ const DEFAULT_ORDERS: PlacedOrder[] = [
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  // Authentication & Profile State
+  const [user, setUser] = useState<any | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>({
+    id: "patron-demo-1",
+    fullName: "Radhika Sharma",
+    email: "radhika.sharma@example.com",
+    phone: "+91 98765 43210",
+    loyaltyPoints: 1420,
+    loyaltyTier: "Loom Patron",
+    role: "customer",
+  });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Products from Supabase / Mock fallback
+  const [products, setProducts] = useState<Product[]>(MOCK_CATALOG);
+
+  // Cart & Wishlist
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<string[]>(["prod-1", "prod-3"]);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+
+  // Checkout & Delivery State
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [verifiedPincode, setVerifiedPincode] = useState<{
@@ -179,11 +235,162 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     days: 3,
     codAvailable: true,
   });
+
   const [orders, setOrders] = useState<PlacedOrder[]>(DEFAULT_ORDERS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Initialize with initial cart item from mock catalog
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // 1. Initialize Supabase Auth & Catalog
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+
+    // Fetch live products
+    fetchProducts().then((loaded) => {
+      if (loaded && loaded.length > 0) {
+        setProducts(loaded);
+      }
+    });
+
+    if (supabase) {
+      // Check active auth session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setUser(session.user);
+          loadCustomerProfile(session.user.id);
+          syncSupabaseUserData(session.user.id);
+        }
+      });
+
+      // Listen for auth changes
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+          loadCustomerProfile(session.user.id);
+          syncSupabaseUserData(session.user.id);
+        } else {
+          setUser(null);
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+
+  const loadCustomerProfile = async (userId: string) => {
+    const supabase: any = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (data && !error) {
+        setCustomerProfile({
+          id: data.id,
+          fullName: data.full_name,
+          email: data.email,
+          phone: data.phone,
+          loyaltyPoints: data.loyalty_points,
+          loyaltyTier: data.loyalty_tier,
+          role: data.role,
+        });
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  // Sync Supabase Cart & Wishlist when logged in
+  const syncSupabaseUserData = async (userId: string) => {
+    const supabase: any = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    try {
+      // 1. Fetch wishlist from database
+      const { data: dbWishlist } = await supabase
+        .from("wishlist_items")
+        .select("product_id")
+        .eq("customer_id", userId);
+
+      if (dbWishlist && dbWishlist.length > 0) {
+        setWishlist(dbWishlist.map((w: any) => w.product_id));
+      }
+
+      // 2. Fetch orders from database
+      const { data: dbOrders } = await supabase
+        .from("orders")
+        .select("*, order_items(*)")
+        .eq("customer_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (dbOrders && dbOrders.length > 0) {
+        const mappedOrders: PlacedOrder[] = dbOrders.map((o: any) => ({
+          orderId: o.order_number,
+          date: new Date(o.created_at).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+          customerName: o.customer_name,
+          phone: o.customer_phone,
+          email: o.customer_email,
+          address: o.shipping_address?.address || "",
+          city: o.shipping_address?.city || "",
+          state: o.shipping_address?.state || "",
+          pincode: o.shipping_address?.pincode || "",
+          items: (o.order_items || []).map((item: any) => {
+            const matchedProduct =
+              products.find((p) => p.id === item.product_id) || MOCK_CATALOG[0];
+            return {
+              cartItemId: item.id,
+              product: matchedProduct,
+              selectedSize: item.variant_size,
+              selectedSwatch: matchedProduct.swatches.find(
+                (s) => s.name === item.swatch_name
+              ),
+              quantity: item.quantity,
+            };
+          }),
+          subtotal: Number(o.subtotal),
+          discount: Number(o.discount),
+          shippingFee: Number(o.shipping_fee),
+          total: Number(o.total),
+          paymentMode: o.payment_mode as any,
+          advancePaid: Number(o.advance_paid),
+          balanceDue: Number(o.balance_due),
+          status: o.status,
+          trackingNumber: o.tracking_awb || "SR-IN-889127394",
+          estimatedDelivery: o.estimated_delivery || "In 3–4 days",
+        }));
+        setOrders(mappedOrders);
+      }
+    } catch (e) {
+      console.warn("Supabase data sync notice:", e);
+    }
+  };
+
+  const signOut = async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setUser(null);
+    showToast("Signed out of your patron dossier.");
+  };
+
+  // 2. LocalStorage Persistence Fallback
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem("kusumika_cart");
@@ -193,7 +400,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       if (savedCart) {
         setCart(JSON.parse(savedCart));
       } else {
-        // Seed initial items for realistic demonstration
         setCart([
           {
             cartItemId: "seed-1",
@@ -237,11 +443,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [cart, wishlist, orders, isInitialized]);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
+  // Cart operations
   const addToCart = (
     product: Product,
     selectedSize = "Double / Queen (84x100\")",
@@ -272,6 +474,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
     showToast(`Added "${product.title}" to your sanctuary cart!`);
     setIsCartDrawerOpen(true);
+
+    // Sync to Supabase if logged in
+    const supabase: any = getSupabaseBrowserClient();
+    if (supabase && user?.id) {
+      (async () => {
+        try {
+          await supabase.from("cart_items").upsert({
+            customer_id: user.id,
+            product_id: product.id,
+            swatch_name: selectedSwatch?.name || null,
+            quantity,
+          });
+        } catch {}
+      })();
+    }
   };
 
   const removeFromCart = (cartItemId: string) => {
@@ -279,6 +496,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     setCart(cart.filter((item) => item.cartItemId !== cartItemId));
     if (removedItem) {
       showToast(`Removed "${removedItem.product.title}" from cart.`);
+
+      const supabase: any = getSupabaseBrowserClient();
+      if (supabase && user?.id) {
+        (async () => {
+          try {
+            await supabase
+              .from("cart_items")
+              .delete()
+              .eq("customer_id", user.id)
+              .eq("product_id", removedItem.product.id);
+          } catch {}
+        })();
+      }
     }
   };
 
@@ -296,20 +526,60 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearCart = () => {
     setCart([]);
+    const supabase: any = getSupabaseBrowserClient();
+    if (supabase && user?.id) {
+      (async () => {
+        try {
+          await supabase
+            .from("cart_items")
+            .delete()
+            .eq("customer_id", user.id);
+        } catch {}
+      })();
+    }
   };
 
+  // Wishlist operations
   const toggleWishlist = (product: Product) => {
+    const supabase: any = getSupabaseBrowserClient();
+
     if (wishlist.includes(product.id)) {
       setWishlist(wishlist.filter((id) => id !== product.id));
       showToast(`Removed "${product.title}" from your wishlist.`);
+
+      if (supabase && user?.id) {
+        (async () => {
+          try {
+            await supabase
+              .from("wishlist_items")
+              .delete()
+              .eq("customer_id", user.id)
+              .eq("product_id", product.id);
+          } catch {}
+        })();
+      }
     } else {
       setWishlist([...wishlist, product.id]);
       showToast(`Saved "${product.title}" to your wishlist!`);
+
+      if (supabase && user?.id) {
+        (async () => {
+          try {
+            await supabase
+              .from("wishlist_items")
+              .insert({
+                customer_id: user.id,
+                product_id: product.id,
+              });
+          } catch {}
+        })();
+      }
     }
   };
 
   const isInWishlist = (productId: string) => wishlist.includes(productId);
 
+  // Coupon Engine
   const applyCoupon = (code: string): boolean => {
     const cleanCode = code.trim().toUpperCase();
     const found = VALID_COUPONS[cleanCode];
@@ -333,6 +603,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     showToast("Coupon removed.");
   };
 
+  // Pincode Serviceability Check
   const checkPincode = (pin: string) => {
     const cleanPin = pin.trim();
     if (!/^\d{6}$/.test(cleanPin)) {
@@ -342,7 +613,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       };
     }
 
-    // Realistic delivery estimation based on pincode prefix
     let city = "Jaipur / Rajasthan Hub";
     let state = "Rajasthan";
     let days = 2;
@@ -390,7 +660,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   };
 
-  // Calculations
+  // Financial Calculations
   const subtotal = cart.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
     0
@@ -405,11 +675,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
-  const shippingFee = 0; // Complimentary Pan-India delivery
+  const shippingFee = 0;
   const total = Math.max(0, subtotal - discount + shippingFee);
 
-  // Partial COD calculation rule:
-  // Advance is min ₹500, or 20% of order if order > ₹3000, rounded to nearest ₹50
+  // Partial COD Rule
   const advancePayable =
     total > 0
       ? total <= 2500
@@ -419,6 +688,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const balanceDue = Math.max(0, total - advancePayable);
 
+  // Order Placement
   const placeOrder = (
     orderDetails: Omit<
       PlacedOrder,
@@ -445,6 +715,60 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     setOrders(updated);
     clearCart();
     showToast(`Order ${newOrder.orderId} placed successfully!`);
+
+    // Insert order in Supabase if client is active
+    const supabase: any = getSupabaseBrowserClient();
+    if (supabase) {
+      (async () => {
+        try {
+          const { data: orderData } = await supabase
+            .from("orders")
+            .insert({
+              order_number: newOrder.orderId,
+              customer_id: user?.id || null,
+              customer_name: newOrder.customerName,
+              customer_phone: newOrder.phone,
+              customer_email: newOrder.email,
+              shipping_address: {
+                address: newOrder.address,
+                city: newOrder.city,
+                state: newOrder.state,
+                pincode: newOrder.pincode,
+              },
+              subtotal: newOrder.subtotal,
+              discount: newOrder.discount,
+              shipping_fee: newOrder.shippingFee,
+              total: newOrder.total,
+              payment_mode: newOrder.paymentMode,
+              advance_paid: newOrder.advancePaid,
+              balance_due: newOrder.balanceDue,
+              status: "Order Placed",
+              tracking_carrier: "Shiprocket Express",
+              tracking_awb: newOrder.trackingNumber,
+              estimated_delivery: newOrder.estimatedDelivery,
+            })
+            .select();
+
+          if (orderData && orderData[0]) {
+            const dbOrderId = orderData[0].id;
+            const itemsToInsert = newOrder.items.map((item: any) => ({
+              order_id: dbOrderId,
+              product_id: item.product.id,
+              product_title: item.product.title,
+              variant_size: item.selectedSize || "Standard",
+              swatch_name: item.selectedSwatch?.name || null,
+              price: item.product.price,
+              quantity: item.quantity,
+              total: item.product.price * item.quantity,
+            }));
+            await supabase.from("order_items").insert(itemsToInsert);
+          }
+        } catch (e) {
+          console.warn("Supabase order insert notice:", e);
+        }
+      })();
+    }
+
     return newOrder;
   };
 
@@ -457,6 +781,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <StoreContext.Provider
       value={{
+        user,
+        customerProfile,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        signOut,
+        products,
         cart,
         addToCart,
         removeFromCart,
@@ -487,6 +817,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       }}
     >
       {children}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </StoreContext.Provider>
   );
 };

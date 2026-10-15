@@ -184,13 +184,28 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Account / Profile Icon */}
-            <Link
-              href="/account"
-              className="w-8 h-8 rounded-full bg-primary-container hover:bg-secondary text-surface flex items-center justify-center ml-1 transition-colors shadow-sm"
-              aria-label="My Account"
-            >
-              <span className="material-symbols-outlined text-[18px]">person</span>
-            </Link>
+            {storeContext?.user ? (
+              <Link
+                href="/account"
+                className="w-8 h-8 rounded-full bg-primary hover:bg-secondary text-surface flex items-center justify-center ml-1 transition-colors shadow-sm font-serif text-xs font-bold"
+                aria-label="My Account"
+                title={`Patron: ${storeContext.customerProfile?.fullName || "Account"}`}
+              >
+                {storeContext.customerProfile?.fullName
+                  ? storeContext.customerProfile.fullName.charAt(0).toUpperCase()
+                  : "P"}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => storeContext?.setIsAuthModalOpen(true)}
+                className="w-8 h-8 rounded-full bg-primary-container hover:bg-secondary text-surface flex items-center justify-center ml-1 transition-colors shadow-sm"
+                aria-label="Sign In"
+                title="Patron Sign In"
+              >
+                <span className="material-symbols-outlined text-[18px]">person</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -246,6 +261,48 @@ export const Header: React.FC<HeaderProps> = ({
               search
             </span>
           </form>
+
+          {/* Patron Fellowship Status Card */}
+          <div className="p-3 bg-surface-container rounded-xl flex items-center justify-between border border-outline-variant/40">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-primary text-surface flex items-center justify-center font-serif text-xs font-bold shrink-0">
+                {storeContext?.user ? "P" : <span className="material-symbols-outlined text-[16px]">person</span>}
+              </div>
+              <div className="text-xs font-sans min-w-0">
+                {storeContext?.user ? (
+                  <>
+                    <p className="font-bold text-primary truncate">{storeContext.customerProfile?.fullName || "Patron Dossier"}</p>
+                    <p className="text-[10px] text-secondary font-semibold">1,420 Atelier Points</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-primary">Patron Fellowship</p>
+                    <p className="text-[10px] text-on-surface-variant">Sign in for member perks</p>
+                  </>
+                )}
+              </div>
+            </div>
+            {storeContext?.user ? (
+              <Link
+                href="/account"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-2.5 py-1 rounded bg-surface border border-outline-variant font-sans text-xs uppercase font-bold text-primary shrink-0"
+              >
+                Dossier
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  storeContext?.setIsAuthModalOpen(true);
+                }}
+                className="px-2.5 py-1 rounded bg-primary text-surface font-sans text-xs uppercase font-bold shrink-0"
+              >
+                Sign In
+              </button>
+            )}
+          </div>
 
           {/* Navigation Category Links */}
           <nav className="flex flex-col divide-y divide-outline-variant/30">
