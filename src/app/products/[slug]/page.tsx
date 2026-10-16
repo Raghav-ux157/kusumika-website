@@ -25,6 +25,7 @@ import { useStore } from "@/context/StoreContext";
 import { formatPrice, cn } from "@/lib/utils";
 import { trackViewItem, trackAddToCart } from "@/lib/analytics/gtag";
 import { metaViewContent, metaAddToCart } from "@/lib/analytics/metaPixel";
+import { ProductJsonLd } from "@/components/seo/JsonLd";
 
 const SIZES = [
   { id: "Double / Queen (84x100\")", label: "Double / Queen (84x100\")", dims: "90 x 108 inches" },
@@ -148,6 +149,7 @@ export default function ProductDetailPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-surface text-on-surface">
+      <ProductJsonLd product={product} />
       <Header />
 
       <main className="flex-1 w-full">

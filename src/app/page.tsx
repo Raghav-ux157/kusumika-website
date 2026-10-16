@@ -8,6 +8,7 @@ import { ProductCard, BulkQuoteModal } from "@/components/commerce";
 import { Button, Card, Badge } from "@/components/ui";
 import { MOCK_CATALOG } from "@/lib/mockCatalog";
 import { useStore } from "@/context/StoreContext";
+import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/JsonLd";
 
 const CATEGORY_STRIP = [
   {
@@ -48,6 +49,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
+      <OrganizationJsonLd />
+      <WebSiteJsonLd />
       {/* Global Header */}
       <Header />
 

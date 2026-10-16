@@ -61,12 +61,54 @@ export default function CheckoutPage() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
 
+  const [formErrors, setFormErrors] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    pincode?: string;
+    city?: string;
+  }>({});
+
   // Failure & Abandonment Recovery State
   const [paymentNotice, setPaymentNotice] = useState<{
     type: "abandoned" | "failed" | "error";
     title: string;
     message: string;
   } | null>(null);
+
+  const validateForm = () => {
+    const errs: typeof formErrors = {};
+
+    if (!formData.name.trim()) {
+      errs.name = "Patron name is required for loom reservation";
+    }
+
+    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errs.email = "Please enter a valid email address for dispatch notification";
+    }
+
+    const cleanPhone = formData.phone.replace(/[\s\-\+]/g, "").slice(-10);
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      errs.phone = "Enter a valid 10-digit Indian mobile number (e.g. 9876543210)";
+    }
+
+    if (!formData.address.trim()) {
+      errs.address = "Complete address is required for doorstep delivery";
+    }
+
+    const cleanPincode = formData.pincode.trim();
+    if (!/^[1-9][0-9]{5}$/.test(cleanPincode)) {
+      errs.pincode = "Enter a valid 6-digit Indian postal pincode";
+    }
+
+    if (!formData.city.trim()) {
+      errs.city = "City / District is required";
+    }
+
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const shippingFee = shippingMethod === "priority" ? 250 : 0;
   const effectiveTotal = total + shippingFee;
@@ -200,6 +242,11 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
+
+    if (!validateForm()) {
+      showToast("Please correct the highlighted contact and address details.");
+      return;
+    }
 
     setIsPlacingOrder(true);
     setPaymentNotice(null);
@@ -447,9 +494,11 @@ export default function CheckoutPage() {
                       label="Full Name"
                       placeholder="e.g. Radhika Sharma"
                       value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
+                      error={formErrors.name}
+                      onChange={(e) => {
+                        setFormData({ ...formData, name: e.target.value });
+                        if (formErrors.name) setFormErrors({ ...formErrors, name: undefined });
+                      }}
                       required
                     />
                     <Input
@@ -457,9 +506,11 @@ export default function CheckoutPage() {
                       type="email"
                       placeholder="e.g. radhika@example.com"
                       value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
+                      error={formErrors.email}
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        if (formErrors.email) setFormErrors({ ...formErrors, email: undefined });
+                      }}
                       required
                     />
                   </div>
@@ -469,11 +520,13 @@ export default function CheckoutPage() {
                     type="tel"
                     placeholder="9876543210"
                     value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
+                    error={formErrors.phone}
+                    onChange={(e) => {
+                      setFormData({ ...formData, phone: e.target.value });
+                      if (formErrors.phone) setFormErrors({ ...formErrors, phone: undefined });
+                    }}
                     leftIcon={<span className="text-xs font-bold font-sans">+91</span>}
-                    helperText="Dispatch status, GPS courier tracking, and doorstep inspection OTP sent via WhatsApp."
+                    helperText="10-digit mobile for dispatch alerts, BlueDart GPS tracking, & doorstep OTP."
                     required
                   />
 
@@ -507,9 +560,11 @@ export default function CheckoutPage() {
                     label="Street Address / Flat / Villa / Haveli"
                     placeholder="e.g. B-42, Gulabi Bagh, Near Civil Lines"
                     value={formData.address}
-                    onChange={(e) =>
-                      setFormData({ ...formData, address: e.target.value })
-                    }
+                    error={formErrors.address}
+                    onChange={(e) => {
+                      setFormData({ ...formData, address: e.target.value });
+                      if (formErrors.address) setFormErrors({ ...formErrors, address: undefined });
+                    }}
                     required
                   />
 
@@ -519,18 +574,22 @@ export default function CheckoutPage() {
                       placeholder="302006"
                       maxLength={6}
                       value={formData.pincode}
-                      onChange={(e) =>
-                        setFormData({ ...formData, pincode: e.target.value })
-                      }
+                      error={formErrors.pincode}
+                      onChange={(e) => {
+                        setFormData({ ...formData, pincode: e.target.value });
+                        if (formErrors.pincode) setFormErrors({ ...formErrors, pincode: undefined });
+                      }}
                       required
                     />
                     <Input
                       label="City / District"
                       placeholder="Jaipur"
                       value={formData.city}
-                      onChange={(e) =>
-                        setFormData({ ...formData, city: e.target.value })
-                      }
+                      error={formErrors.city}
+                      onChange={(e) => {
+                        setFormData({ ...formData, city: e.target.value });
+                        if (formErrors.city) setFormErrors({ ...formErrors, city: undefined });
+                      }}
                       required
                     />
                     <Select
