@@ -70,6 +70,8 @@ export default function CheckoutPage() {
     city?: string;
   }>({});
 
+  const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
+
   // Failure & Abandonment Recovery State
   const [paymentNotice, setPaymentNotice] = useState<{
     type: "abandoned" | "failed" | "error";
@@ -470,6 +472,93 @@ export default function CheckoutPage() {
           )}
 
           <form onSubmit={handlePlaceOrder}>
+            {/* MOBILE ORDER SUMMARY ACCORDION (LG:HIDDEN) */}
+            <div className="lg:hidden mb-6 rounded-xl border border-outline-variant/60 bg-surface-container overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setMobileSummaryOpen(!mobileSummaryOpen)}
+                className="w-full p-4 flex items-center justify-between text-left font-sans text-xs uppercase font-bold text-primary tracking-wider"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[20px] text-secondary">
+                    shopping_bag
+                  </span>
+                  <span>{mobileSummaryOpen ? "Hide Sanctuary Order Summary" : "Show Sanctuary Order Summary"}</span>
+                  <span className="material-symbols-outlined text-[18px] text-outline transition-transform duration-200">
+                    {mobileSummaryOpen ? "expand_less" : "expand_more"}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-serif text-base font-bold text-primary">
+                    {formatPrice(effectiveTotal)}
+                  </span>
+                </div>
+              </button>
+
+              {mobileSummaryOpen && (
+                <div className="p-4 pt-0 border-t border-outline-variant/30 space-y-3 bg-surface-container-low animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="divide-y divide-outline-variant/30 max-h-60 overflow-y-auto">
+                    {cart.map((item) => (
+                      <div key={item.cartItemId || item.product.id} className="py-2.5 flex items-center gap-3">
+                        <div className="relative w-12 h-14 rounded overflow-hidden bg-surface-dim shrink-0">
+                          <Image
+                            src={item.product.images[0]}
+                            alt={item.product.title}
+                            fill
+                            sizes="48px"
+                            className="object-cover"
+                          />
+                          <span className="absolute top-0.5 right-0.5 px-1 bg-primary text-surface font-sans text-[9px] font-bold rounded-full">
+                            {item.quantity}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-serif text-xs text-primary font-medium truncate">
+                            {item.product.title}
+                          </p>
+                          <p className="font-sans text-[10px] text-outline">
+                            {item.selectedSize || "Standard Set"} {item.selectedSwatch ? `• ${item.selectedSwatch.name}` : ""}
+                          </p>
+                        </div>
+                        <span className="font-serif text-xs font-bold text-primary">
+                          {formatPrice(item.product.price * item.quantity)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-3 border-t border-outline-variant/40 space-y-1.5 text-xs font-sans">
+                    <div className="flex justify-between text-on-surface-variant">
+                      <span>Subtotal ({cart.reduce((acc, i) => acc + i.quantity, 0)} items)</span>
+                      <span>{formatPrice(subtotal)}</span>
+                    </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between text-secondary font-medium">
+                        <span>Heritage Courtesy Discount</span>
+                        <span>-{formatPrice(discount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-on-surface-variant">
+                      <span>Express Preservation Logistics</span>
+                      <span>{shippingFee > 0 ? formatPrice(shippingFee) : "Complimentary"}</span>
+                    </div>
+                    {paymentMode === "partial_cod" && (
+                      <div className="p-2.5 rounded bg-surface border border-secondary/30 mt-2 space-y-1">
+                        <div className="flex justify-between font-bold text-secondary">
+                          <span>Advance Payable Online:</span>
+                          <span>{formatPrice(effectiveAdvance)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-outline">
+                          <span>Balance on Delivery:</span>
+                          <span>{formatPrice(effectiveBalanceDue)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
               {/* Left Column: Checkout Steps 1, 2, 3 (8 cols) */}
               <div className="lg:col-span-8 space-y-8">

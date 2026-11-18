@@ -1,9 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import { GlobalStoreDrawer } from "@/components/layout/GlobalStoreDrawer";
 import { CookieConsentBanner } from "@/components/analytics/CookieConsentBanner";
 import { AnalyticsScripts } from "@/components/analytics/AnalyticsScripts";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#5C181A",
+};
 
 export const metadata: Metadata = {
   title: "Kusumika | Soft like Silk, Feels like a Hug",

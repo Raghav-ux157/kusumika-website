@@ -152,10 +152,10 @@ export default function ProductDetailPage({
       <ProductJsonLd product={product} />
       <Header />
 
-      <main className="flex-1 w-full">
+      <main className="flex-1 w-full pb-20 lg:pb-0">
         {/* BREADCRUMBS BAR */}
         <div className="bg-surface-container-low border-b border-outline-variant/30 py-3 px-4 sm:px-8 lg:px-12 select-none">
-          <div className="max-w-[1360px] mx-auto flex items-center gap-2 text-xs font-sans text-outline overflow-x-auto whitespace-nowrap">
+          <div className="max-w-[1360px] mx-auto flex items-center gap-2 text-xs font-sans text-outline overflow-x-auto whitespace-nowrap no-scrollbar">
             <Link href="/" className="hover:text-primary transition-colors">
               Home
             </Link>
@@ -209,7 +209,7 @@ export default function ProductDetailPage({
 
               {/* Thumbnails Strip */}
               {product.images.length > 1 && (
-                <div className="flex items-center gap-3 overflow-x-auto pb-2">
+                <div className="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar touch-pan-x">
                   {product.images.map((img, idx) => (
                     <button
                       key={idx}
@@ -738,6 +738,57 @@ export default function ProductDetailPage({
           </div>
         </section>
       </main>
+
+      {/* MOBILE STICKY BOTTOM ACTION BAR (Touch-first mobile commerce) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-md border-t border-outline-variant/60 p-3 sm:px-6 safe-bottom-padding shadow-2xl flex items-center justify-between gap-3">
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-[11px] uppercase font-sans font-bold tracking-wider text-outline truncate">
+            {product.title}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-serif text-lg font-bold text-primary">
+              {formatPrice(product.price * quantity)}
+            </span>
+            <span className="text-[9px] font-sans font-bold text-secondary bg-surface-container px-1.5 py-0.5 rounded">
+              Partial COD: {formatPrice(advanceAmount)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            aria-label="Wishlist toggle"
+            onClick={() => toggleWishlist(product)}
+            className={cn(
+              "p-2.5 rounded-lg border border-outline-variant/60 flex items-center justify-center transition-colors shadow-sm",
+              isWishlisted
+                ? "text-secondary bg-surface-container"
+                : "text-outline hover:text-primary bg-surface"
+            )}
+          >
+            <span
+              className="material-symbols-outlined text-[20px]"
+              style={{ fontVariationSettings: isWishlisted ? "'FILL' 1" : "'FILL' 0" }}
+            >
+              favorite
+            </span>
+          </button>
+
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleAddToCart}
+            leftIcon={
+              <span className="material-symbols-outlined text-[18px]">
+                shopping_bag
+              </span>
+            }
+          >
+            Add to Cart
+          </Button>
+        </div>
+      </div>
 
       <Footer />
 

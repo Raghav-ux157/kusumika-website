@@ -200,6 +200,8 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
         return activeRole === "sales";
       case "reports":
         return false; // Admin only
+      case "seo":
+        return activeRole === "sales";
       case "settings":
         return false; // Admin only
       default:

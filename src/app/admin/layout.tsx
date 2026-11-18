@@ -69,6 +69,14 @@ const NAV_ITEMS = [
     roles: ["admin"],
   },
   {
+    path: "/admin/seo",
+    id: "seo",
+    label: "SEO & Search Engine",
+    icon: "travel_explore",
+    badge: "96%",
+    roles: ["admin", "sales"],
+  },
+  {
     path: "/admin/settings",
     id: "settings",
     label: "Settings",
