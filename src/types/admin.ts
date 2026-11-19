@@ -171,3 +171,36 @@ export interface AbandonedCart {
   recovery_status: "pending" | "nudge_sent" | "recovered" | "lost";
   last_nudge_at?: string;
 }
+
+export interface StaffRoleRecord {
+  id: string;
+  user_id: string;
+  email: string;
+  role: StaffRole;
+  full_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StaffSession {
+  userId: string;
+  email: string;
+  fullName: string;
+  role: StaffRole;
+  issuedAt: number;
+  expiresAt: number;
+}
+
+export const ROLE_ROUTE_PERMISSIONS: Record<string, StaffRole[]> = {
+  "/admin": ["admin", "sales", "support", "warehouse"],
+  "/admin/orders": ["admin", "sales", "warehouse", "support"],
+  "/admin/customers": ["admin", "sales", "support"],
+  "/admin/leads": ["admin", "sales"],
+  "/admin/abandoned-carts": ["admin", "sales"],
+  "/admin/seo": ["admin", "sales"],
+  "/admin/inventory": ["admin", "warehouse"],
+  "/admin/tickets": ["admin", "support"],
+  "/admin/reports": ["admin"],
+  "/admin/settings": ["admin"],
+};
+

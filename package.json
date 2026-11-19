@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:admin": "node scripts/seed-admin.mjs",
+    "test:auth": "node scripts/test-phase7a.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

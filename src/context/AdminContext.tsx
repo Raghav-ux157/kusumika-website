@@ -24,6 +24,9 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 interface AdminContextType {
   activeRole: StaffRole;
   setActiveRole: (role: StaffRole) => void;
+  staffUser: { userId: string; email: string; fullName: string; role: StaffRole } | null;
+  isLoadingStaff: boolean;
+  logout: () => Promise<void>;
   hasAccess: (module: string) => boolean;
 
   // Cluster Filter
@@ -70,6 +73,13 @@ const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
 export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [activeRole, setActiveRoleState] = useState<StaffRole>("admin");
+  const [staffUser, setStaffUser] = useState<{
+    userId: string;
+    email: string;
+    fullName: string;
+    role: StaffRole;
+  } | null>(null);
+  const [isLoadingStaff, setIsLoadingStaff] = useState<boolean>(true);
   const [selectedCluster, setSelectedCluster] = useState<string>("All Clusters: Sanganer, Bagru, Jaipur");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -85,6 +95,15 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const logout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.location.href = "/admin/login";
+    }
+  };
+
   const setActiveRole = (role: StaffRole) => {
     setActiveRoleState(role);
     if (typeof window !== "undefined") {
@@ -98,6 +117,27 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     };
     showToast(`Switched active persona to ${roleLabels[role]}`);
   };
+
+  // Fetch real authenticated staff user from server session on mount
+  useEffect(() => {
+    async function fetchSession() {
+      try {
+        const res = await fetch("/api/admin/staff-role");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated && data.user) {
+            setStaffUser(data.user);
+            setActiveRoleState(data.user.role);
+          }
+        }
+      } catch (err) {
+        console.warn("[AdminContext] Failed to load staff session:", err);
+      } finally {
+        setIsLoadingStaff(false);
+      }
+    }
+    fetchSession();
+  }, []);
 
   // Load from localStorage or Supabase on mount
   useEffect(() => {
@@ -461,6 +501,9 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       value={{
         activeRole,
         setActiveRole,
+        staffUser,
+        isLoadingStaff,
+        logout,
         hasAccess,
         selectedCluster,
         setSelectedCluster,

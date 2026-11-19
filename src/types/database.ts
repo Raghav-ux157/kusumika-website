@@ -748,6 +748,35 @@ export interface Database {
           created_at?: string;
         };
       };
+      staff_roles: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          role: "admin" | "sales" | "support" | "warehouse";
+          full_name: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          role: "admin" | "sales" | "support" | "warehouse";
+          full_name?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          email?: string;
+          role?: "admin" | "sales" | "support" | "warehouse";
+          full_name?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 }

@@ -558,3 +558,56 @@ CREATE TRIGGER update_customers_timestamp BEFORE UPDATE ON customers FOR EACH RO
 CREATE TRIGGER update_orders_timestamp BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_leads_timestamp BEFORE UPDATE ON leads FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_tickets_timestamp BEFORE UPDATE ON tickets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ==============================================================================
+-- 14. STAFF ROLES & OPERATIONAL RBAC
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.staff_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'sales', 'support', 'warehouse')),
+  full_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE public.staff_roles ENABLE ROW LEVEL SECURITY;
+
+-- Helper to check if staff user is an admin
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.staff_roles
+    WHERE user_id = auth.uid() AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Helper to get active staff role
+CREATE OR REPLACE FUNCTION public.current_staff_role()
+RETURNS TEXT AS $$
+DECLARE
+  v_role TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.staff_roles WHERE user_id = auth.uid();
+  RETURN v_role;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Policies for staff_roles
+CREATE POLICY "Staff can view their own role"
+  ON public.staff_roles FOR SELECT
+  USING (auth.uid() = user_id OR is_admin());
+
+CREATE POLICY "Admins can manage staff roles"
+  ON public.staff_roles FOR ALL
+  USING (is_admin());
+
+CREATE TRIGGER update_staff_roles_timestamp
+  BEFORE UPDATE ON public.staff_roles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
