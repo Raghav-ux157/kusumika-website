@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { confirmOrderPayment } from "@/lib/orders/orderService";
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const signature = req.headers.get("x-razorpay-signature");
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-    // Check signature if secret is configured
+    // 1. Mandatory Cryptographic Webhook Signature Verification
     if (webhookSecret && webhookSecret !== "your_webhook_secret") {
       if (!signature) {
         return NextResponse.json(
@@ -32,61 +32,49 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+    } else if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { error: "Razorpay webhook secret is not configured in production." },
+        { status: 500 }
+      );
     }
 
     const event = JSON.parse(rawBody);
     const eventType = event.event;
-    console.log(`[Razorpay Webhook Received]: ${eventType}`, {
-      id: event.payload?.payment?.entity?.id || event.payload?.order?.entity?.id,
-    });
-
-    const supabase: any = getSupabaseAdminClient();
+    console.log(`[Razorpay Webhook Verified]: Event ${eventType}`);
 
     switch (eventType) {
-      case "payment.captured": {
+      case "payment.captured":
+      case "order.paid": {
         const paymentEntity = event.payload?.payment?.entity;
-        if (paymentEntity && supabase) {
-          const razorpayPaymentId = paymentEntity.id;
-          const razorpayOrderId = paymentEntity.order_id;
-          const amountInInr = (paymentEntity.amount || 0) / 100;
-
-          // Check if payment already recorded
-          const { data: existingPayment } = await supabase
-            .from("payments")
-            .select("id, status")
-            .eq("razorpay_payment_id", razorpayPaymentId)
-            .maybeSingle();
-
-          if (existingPayment) {
-            if (existingPayment.status !== "captured") {
-              await supabase
-                .from("payments")
-                .update({ status: "captured" })
-                .eq("id", existingPayment.id);
-            }
-          } else {
-            // Find corresponding order if exists
-            const { data: order } = await supabase
-              .from("orders")
-              .select("id, total, advance_paid")
-              .eq("order_number", paymentEntity.notes?.order_number || "")
-              .maybeSingle();
-
-            if (order) {
-              await supabase.from("payments").insert({
-                order_id: order.id,
-                gateway: "razorpay",
-                razorpay_order_id: razorpayOrderId,
-                razorpay_payment_id: razorpayPaymentId,
-                amount: amountInInr,
-                status: "captured",
-                payment_type: amountInInr < order.total ? "advance" : "full",
-                metadata: paymentEntity,
-              });
-            }
-          }
+        if (!paymentEntity) {
+          return NextResponse.json({ success: true, message: "No payment entity found in payload" });
         }
-        break;
+
+        const razorpayPaymentId = paymentEntity.id;
+        const razorpayOrderId = paymentEntity.order_id;
+        const orderNumber = paymentEntity.notes?.order_number;
+        const amountInInr = (paymentEntity.amount || 0) / 100;
+
+        // 2. Process payment with idempotency (prevents duplicate orders or notifications on retries)
+        const confirmation = await confirmOrderPayment({
+          razorpayPaymentId,
+          razorpayOrderId,
+          orderNumber,
+          amountPaidInInr: amountInInr,
+          metadata: {
+            webhook_event: eventType,
+            captured_at: new Date().toISOString(),
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          idempotent: confirmation.alreadyProcessed,
+          orderNumber: confirmation.orderNumber,
+          status: confirmation.status,
+          message: confirmation.message,
+        });
       }
 
       case "payment.failed": {
@@ -97,54 +85,16 @@ export async function POST(req: NextRequest) {
           error_code: paymentEntity?.error_code,
           error_description: paymentEntity?.error_description,
         });
-
-        if (paymentEntity && supabase) {
-          const orderNumber = paymentEntity.notes?.order_number;
-          if (orderNumber) {
-            // Record failure in payments table or log alert
-            const { data: order } = await supabase
-              .from("orders")
-              .select("id")
-              .eq("order_number", orderNumber)
-              .maybeSingle();
-
-            if (order) {
-              await supabase.from("payments").insert({
-                order_id: order.id,
-                gateway: "razorpay",
-                razorpay_order_id: paymentEntity.order_id,
-                razorpay_payment_id: paymentEntity.id,
-                amount: (paymentEntity.amount || 0) / 100,
-                status: "failed",
-                payment_type: "advance",
-                metadata: {
-                  error_code: paymentEntity.error_code,
-                  error_description: paymentEntity.error_description,
-                  failed_at: new Date().toISOString(),
-                },
-              });
-            }
-          }
-        }
-        break;
-      }
-
-      case "order.paid": {
-        const orderEntity = event.payload?.order?.entity;
-        console.log("[Razorpay Webhook] Order fully paid:", orderEntity?.id);
-        break;
+        return NextResponse.json({ success: true, status: "payment_failed_recorded" });
       }
 
       default:
-        console.log(`[Razorpay Webhook] Unhandled event type: ${eventType}`);
-        break;
+        return NextResponse.json({ success: true, status: "event_ignored" });
     }
-
-    return NextResponse.json({ received: true });
   } catch (error: any) {
-    console.error("[Razorpay Webhook Handler Error]:", error);
+    console.error("[Razorpay Webhook Processing Error]:", error);
     return NextResponse.json(
-      { error: "Webhook processing error" },
+      { error: error.message || "Failed to process Razorpay webhook" },
       { status: 500 }
     );
   }

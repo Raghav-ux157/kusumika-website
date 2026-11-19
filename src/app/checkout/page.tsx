@@ -151,44 +151,10 @@ export default function CheckoutPage() {
     razorpay_order_id: string;
     razorpay_payment_id: string;
     razorpay_signature: string;
-    isMock: boolean;
     orderNumber: string;
+    orderId?: string;
   }) => {
     try {
-      const orderData = {
-        order_number: params.orderNumber,
-        customer_id: user?.id || null,
-        customer_name: formData.name,
-        customer_email: formData.email,
-        customer_phone: `+91 ${formData.phone}`,
-        shipping_address: {
-          address_line1: formData.address,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          landmark: formData.landmark,
-        },
-        items: cart.map((item) => ({
-          product_id: item.product.id,
-          product_title: item.product.title,
-          variant_size: item.selectedSize || "Standard",
-          swatch_name: item.selectedSwatch?.name || null,
-          image_url: item.product.images[0] || null,
-          price: item.product.price,
-          quantity: item.quantity,
-          total: item.product.price * item.quantity,
-        })),
-        subtotal,
-        discount,
-        shipping_fee: shippingFee,
-        total: effectiveTotal,
-        payment_mode: paymentMode,
-        advance_paid: effectiveAdvance,
-        balance_due: effectiveBalanceDue,
-        coupon_code: appliedCoupon?.code || null,
-        notes: `Preservation method: ${shippingMethod === "priority" ? "Priority Haveli Express Air" : "Standard Insured Loom"}`,
-      };
-
       const verifyRes = await fetch("/api/checkout/verify-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,8 +162,8 @@ export default function CheckoutPage() {
           razorpay_order_id: params.razorpay_order_id,
           razorpay_payment_id: params.razorpay_payment_id,
           razorpay_signature: params.razorpay_signature,
-          isMock: params.isMock,
-          orderData,
+          orderNumber: params.orderNumber,
+          orderId: params.orderId,
         }),
       });
 
@@ -253,23 +219,36 @@ export default function CheckoutPage() {
     setIsPlacingOrder(true);
     setPaymentNotice(null);
 
-    const orderNumber = `KSM-${Math.floor(10000 + Math.random() * 90000)}`;
-    const amountToPayInInr = effectiveAdvance;
-
     try {
-      // 1. Create Order on Razorpay backend
+      // 1. Create Order on Razorpay backend with server-side price recomputation & pre-creation
       const createOrderRes = await fetch("/api/checkout/create-razorpay-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: amountToPayInInr,
-          currency: "INR",
-          receipt: `rcpt_${orderNumber}`,
+          items: cart.map((item) => ({
+            productId: item.product.id,
+            variantSize: item.selectedSize || "Standard",
+            swatchName: item.selectedSwatch?.name || null,
+            quantity: item.quantity,
+          })),
+          customer: {
+            id: user?.id || null,
+            name: formData.name,
+            email: formData.email,
+            phone: `+91 ${formData.phone}`,
+          },
+          shippingAddress: {
+            address_line1: formData.address,
+            city: formData.city,
+            state: formData.state,
+            pincode: formData.pincode,
+            landmark: formData.landmark,
+          },
+          couponCode: appliedCoupon?.code || null,
+          shippingMethod,
+          paymentMode,
           notes: {
-            order_number: orderNumber,
-            customer_name: formData.name,
-            customer_email: formData.email,
-            payment_mode: paymentMode,
+            special_instructions: `Preservation method: ${shippingMethod === "priority" ? "Priority Haveli Express Air" : "Standard Insured Loom"}`,
           },
         }),
       });
@@ -280,6 +259,8 @@ export default function CheckoutPage() {
       }
 
       const rzpOrder = await createOrderRes.json();
+      const serverOrderNumber = rzpOrder.orderNumber;
+      const serverOrderId = rzpOrder.orderId;
 
       // 2. If Razorpay client is available on window and not blocked
       if (typeof window !== "undefined" && (window as any).Razorpay) {
@@ -290,8 +271,8 @@ export default function CheckoutPage() {
           name: "Kusumika Luxury Home Textiles",
           description:
             paymentMode === "partial_cod"
-              ? `Artisan Loom Advance (${formatPrice(effectiveAdvance)}) for #${orderNumber}`
-              : `Order Reservation #${orderNumber}`,
+              ? `Artisan Loom Advance (${formatPrice(effectiveAdvance)}) for #${serverOrderNumber}`
+              : `Order Reservation #${serverOrderNumber}`,
           image: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=128&q=80",
           order_id: rzpOrder.isMock ? undefined : rzpOrder.id,
           handler: async function (response: any) {
@@ -299,8 +280,8 @@ export default function CheckoutPage() {
               razorpay_order_id: response.razorpay_order_id || rzpOrder.id,
               razorpay_payment_id: response.razorpay_payment_id || `pay_test_${Date.now()}`,
               razorpay_signature: response.razorpay_signature || "simulated_valid_signature",
-              isMock: rzpOrder.isMock,
-              orderNumber,
+              orderNumber: serverOrderNumber,
+              orderId: serverOrderId,
             });
           },
           prefill: {
@@ -346,8 +327,8 @@ export default function CheckoutPage() {
             razorpay_order_id: rzpOrder.id,
             razorpay_payment_id: `pay_sandbox_${Date.now()}`,
             razorpay_signature: "sandbox_simulated_sig",
-            isMock: true,
-            orderNumber,
+            orderNumber: serverOrderNumber,
+            orderId: serverOrderId,
           });
         }, 1200);
       }

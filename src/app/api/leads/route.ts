@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit, createRateLimitResponse } from "@/lib/security/rateLimit";
 
 export async function POST(req: NextRequest) {
+  // Rate limiting: max 10 submissions per minute per IP
+  const rateLimitResult = checkRateLimit(req, {
+    limit: 10,
+    windowMs: 60 * 1000,
+    prefix: "leads_submit",
+  });
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(rateLimitResult);
+  }
+
   try {
     const body = await req.json();
 

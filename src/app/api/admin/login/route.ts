@@ -5,8 +5,19 @@ import {
   ADMIN_SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/auth/adminAuth";
+import { checkRateLimit, createRateLimitResponse } from "@/lib/security/rateLimit";
 
 export async function POST(req: NextRequest) {
+  // Rate limiting: max 10 login attempts per minute per IP to prevent brute-forcing
+  const rateLimitResult = checkRateLimit(req, {
+    limit: 10,
+    windowMs: 60 * 1000,
+    prefix: "admin_login",
+  });
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(rateLimitResult);
+  }
+
   try {
     const body = await req.json();
     const { email, password } = body;
