@@ -49,8 +49,17 @@ export const FALLBACK_CATEGORIES: CategoryItem[] = [
 ];
 
 export async function fetchCategories(): Promise<CategoryItem[]> {
+  const isProduction = process.env.NODE_ENV === "production";
   const supabase: any = getSupabaseBrowserClient();
-  if (!supabase) return FALLBACK_CATEGORIES;
+
+  if (!supabase) {
+    if (isProduction) {
+      throw new Error(
+        "Supabase database connection is not configured in production environment. Real catalog required."
+      );
+    }
+    return FALLBACK_CATEGORIES;
+  }
 
   try {
     const { data, error } = await supabase
@@ -59,7 +68,19 @@ export async function fetchCategories(): Promise<CategoryItem[]> {
       .eq("is_active", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
+    if (error) {
+      if (isProduction) {
+        throw new Error(`Failed to load atelier categories: ${error.message}`);
+      }
+      return FALLBACK_CATEGORIES;
+    }
+
+    if (!data || data.length === 0) {
+      if (isProduction) {
+        throw new Error(
+          "Atelier categories are currently empty. Archival sync in progress."
+        );
+      }
       return FALLBACK_CATEGORIES;
     }
 
@@ -70,14 +91,26 @@ export async function fetchCategories(): Promise<CategoryItem[]> {
       description: c.description || "",
       heroImage: c.hero_image || MOCK_CATALOG[0].images[0],
     }));
-  } catch {
+  } catch (err: any) {
+    if (isProduction) {
+      throw err;
+    }
     return FALLBACK_CATEGORIES;
   }
 }
 
 export async function fetchProducts(): Promise<Product[]> {
+  const isProduction = process.env.NODE_ENV === "production";
   const supabase = getSupabaseBrowserClient();
-  if (!supabase) return MOCK_CATALOG;
+
+  if (!supabase) {
+    if (isProduction) {
+      throw new Error(
+        "Supabase database connection is not configured in production environment. Real catalog required."
+      );
+    }
+    return MOCK_CATALOG;
+  }
 
   try {
     const { data, error } = await supabase
@@ -85,16 +118,38 @@ export async function fetchProducts(): Promise<Product[]> {
       .select("*, categories(slug), product_variants(*), product_swatches(*), product_images(*)")
       .eq("is_active", true);
 
-    if (error || !data || data.length === 0) {
+    if (error) {
+      if (isProduction) {
+        throw new Error(`Failed to load atelier catalog from database: ${error.message}`);
+      }
       return MOCK_CATALOG;
     }
 
+    if (!data || data.length === 0) {
+      if (isProduction) {
+        throw new Error(
+          "Atelier catalog is currently empty in database. Please run catalog seeder."
+        );
+      }
+      return MOCK_CATALOG;
+    }
+
+    const storageBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/product-images`
+      : "";
+
     return data.map((p: any) => {
-      const swatches: ProductSwatch[] = (p.product_swatches || []).map((s: any) => ({
-        name: s.name,
-        hex: s.color_code,
-        image: s.image_url,
-      }));
+      const swatches: ProductSwatch[] = (p.product_swatches || []).map((s: any) => {
+        let swatchImg = s.image_url;
+        if (swatchImg && !swatchImg.startsWith("http") && storageBaseUrl) {
+          swatchImg = `${storageBaseUrl}/${swatchImg.replace(/^\//, "")}`;
+        }
+        return {
+          name: s.name,
+          hex: s.color_code,
+          image: swatchImg,
+        };
+      });
 
       const variants: ProductVariant[] = (p.product_variants || []).map((v: any) => ({
         id: v.id,
@@ -109,7 +164,13 @@ export async function fetchProducts(): Promise<Product[]> {
 
       const images: string[] = (p.product_images || [])
         .sort((a: any, b: any) => a.sort_order - b.sort_order)
-        .map((img: any) => img.image_url);
+        .map((img: any) => {
+          let url = img.image_url;
+          if (url && !url.startsWith("http") && storageBaseUrl) {
+            url = `${storageBaseUrl}/${url.replace(/^\//, "")}`;
+          }
+          return url;
+        });
 
       const categorySlug = (p.categories?.slug || "bedsheets-linens") as ProductCategory;
 
@@ -139,7 +200,10 @@ export async function fetchProducts(): Promise<Product[]> {
         careInstructions: p.care_instructions ? p.care_instructions.split(". ") : undefined,
       };
     });
-  } catch {
+  } catch (err: any) {
+    if (isProduction) {
+      throw err;
+    }
     return MOCK_CATALOG;
   }
 }

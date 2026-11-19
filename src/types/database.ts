@@ -777,6 +777,120 @@ export interface Database {
           updated_at?: string;
         };
       };
+      abandoned_checkouts: {
+        Row: {
+          id: string;
+          customer_id: string | null;
+          email: string;
+          phone: string | null;
+          customer_name: string | null;
+          cart_items: Json;
+          subtotal: number;
+          total: number;
+          recovery_status: "pending" | "nudge_sent" | "recovered" | "lost";
+          last_nudge_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_id?: string | null;
+          email: string;
+          phone?: string | null;
+          customer_name?: string | null;
+          cart_items?: Json;
+          subtotal?: number;
+          total?: number;
+          recovery_status?: "pending" | "nudge_sent" | "recovered" | "lost";
+          last_nudge_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_id?: string | null;
+          email?: string;
+          phone?: string | null;
+          customer_name?: string | null;
+          cart_items?: Json;
+          subtotal?: number;
+          total?: number;
+          recovery_status?: "pending" | "nudge_sent" | "recovered" | "lost";
+          last_nudge_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      inventory_movements: {
+        Row: {
+          id: string;
+          product_id: string;
+          variant_id: string | null;
+          movement_type: "purchase_receipt" | "sale" | "return_restock" | "damage_writeoff" | "manual_adjustment";
+          quantity_delta: number;
+          previous_stock: number;
+          new_stock: number;
+          reference_order_id: string | null;
+          reason: string | null;
+          performed_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          variant_id?: string | null;
+          movement_type: "purchase_receipt" | "sale" | "return_restock" | "damage_writeoff" | "manual_adjustment";
+          quantity_delta: number;
+          previous_stock?: number;
+          new_stock?: number;
+          reference_order_id?: string | null;
+          reason?: string | null;
+          performed_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          variant_id?: string | null;
+          movement_type?: "purchase_receipt" | "sale" | "return_restock" | "damage_writeoff" | "manual_adjustment";
+          quantity_delta?: number;
+          previous_stock?: number;
+          new_stock?: number;
+          reference_order_id?: string | null;
+          reason?: string | null;
+          performed_by?: string | null;
+          created_at?: string;
+        };
+      };
+      site_settings: {
+        Row: {
+          id: string;
+          key: string;
+          value: Json;
+          description: string | null;
+          is_public: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          value: Json;
+          description?: string | null;
+          is_public?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          key?: string;
+          value?: Json;
+          description?: string | null;
+          is_public?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 }

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "seed:admin": "node scripts/seed-admin.mjs",
+    "seed:catalog": "node scripts/seed-catalog.mjs",
     "test:auth": "node scripts/test-phase7a.mjs",
     "test:security": "node scripts/test-phase7b.mjs"
   },

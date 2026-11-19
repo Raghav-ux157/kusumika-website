@@ -1,10 +1,10 @@
 -- ==============================================================================
--- KUSUMIKA LUXURY HOME TEXTILES - SUPABASE POSTGRESQL DATABASE SCHEMA
+-- KUSUMIKA LUXURY HOME TEXTILES - COMPLETE SUPABASE POSTGRESQL SCHEMA
 -- Tagline: "Soft like Silk, Feels like a Hug"
--- Complete Schema with Row-Level Security (RLS) & Triggers
+-- Complete Production Schema with Row-Level Security (RLS), Storage & Triggers
 -- ==============================================================================
 
--- Enable UUID extension
+-- Enable Core Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -12,29 +12,53 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 1. ENUMS
 -- ==============================================================================
 
-CREATE TYPE user_role AS ENUM ('customer', 'staff', 'admin', 'weaver_coordinator');
-CREATE TYPE order_status AS ENUM (
-  'Order Placed',
-  'Loom Assigned',
-  'Natural Dyeing',
-  'Quality Inspected',
-  'Shipped',
-  'Out for Delivery',
-  'Delivered',
-  'Cancelled'
-);
-CREATE TYPE payment_gateway AS ENUM ('razorpay', 'cash', 'manual_bank');
-CREATE TYPE payment_status AS ENUM ('pending', 'captured', 'failed', 'refunded');
-CREATE TYPE payment_type AS ENUM ('advance', 'balance', 'full');
-CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed');
-CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'urgent');
-CREATE TYPE lead_status AS ENUM ('new', 'contacted', 'quote_sent', 'negotiation', 'converted', 'lost');
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('customer', 'staff', 'admin', 'weaver_coordinator');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE order_status AS ENUM (
+    'Pending Payment',
+    'Order Placed',
+    'Loom Assigned',
+    'Natural Dyeing',
+    'Quality Inspected',
+    'Shipped',
+    'Out for Delivery',
+    'Delivered',
+    'Cancelled'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE payment_gateway AS ENUM ('razorpay', 'cash', 'manual_bank');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE payment_status AS ENUM ('pending', 'captured', 'failed', 'refunded');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE payment_type AS ENUM ('advance', 'balance', 'full');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'urgent');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE lead_status AS ENUM ('new', 'contacted', 'quote_sent', 'negotiation', 'converted', 'lost');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ==============================================================================
 -- 2. CATEGORIES
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS categories (
+CREATE TABLE IF NOT EXISTS public.categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slug TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
@@ -47,10 +71,10 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 -- ==============================================================================
--- 3. PRODUCTS & VARIANTS
+-- 3. PRODUCTS, VARIANTS, SWATCHES & IMAGES
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE IF NOT EXISTS public.products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
   subtitle TEXT,
@@ -65,7 +89,7 @@ CREATE TABLE IF NOT EXISTS products (
   gots_certified BOOLEAN DEFAULT TRUE,
   base_price NUMERIC(10, 2) NOT NULL,
   mrp NUMERIC(10, 2) NOT NULL,
-  category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+  category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL,
   is_active BOOLEAN DEFAULT TRUE,
   is_featured BOOLEAN DEFAULT FALSE,
   is_festive BOOLEAN DEFAULT FALSE,
@@ -75,9 +99,9 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS product_variants (
+CREATE TABLE IF NOT EXISTS public.product_variants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   sku TEXT UNIQUE NOT NULL,
   size TEXT NOT NULL,
   dimensions TEXT,
@@ -87,9 +111,9 @@ CREATE TABLE IF NOT EXISTS product_variants (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS product_swatches (
+CREATE TABLE IF NOT EXISTS public.product_swatches (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   color_code TEXT NOT NULL,
   image_url TEXT NOT NULL,
@@ -97,9 +121,9 @@ CREATE TABLE IF NOT EXISTS product_swatches (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS product_images (
+CREATE TABLE IF NOT EXISTS public.product_images (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   image_url TEXT NOT NULL,
   alt_text TEXT,
   is_primary BOOLEAN DEFAULT FALSE,
@@ -108,10 +132,10 @@ CREATE TABLE IF NOT EXISTS product_images (
 );
 
 -- ==============================================================================
--- 4. CUSTOMERS & STAFF PROFILES (Linked to Supabase Auth)
+-- 4. CUSTOMERS & ADDRESSES (Linked to Supabase Auth)
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS customers (
+CREATE TABLE IF NOT EXISTS public.customers (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL,
   phone TEXT,
@@ -125,9 +149,9 @@ CREATE TABLE IF NOT EXISTS customers (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS addresses (
+CREATE TABLE IF NOT EXISTS public.addresses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
   label TEXT NOT NULL DEFAULT 'Home',
   name TEXT NOT NULL,
   phone TEXT NOT NULL,
@@ -146,7 +170,7 @@ CREATE TABLE IF NOT EXISTS addresses (
 -- 5. COUPONS & DISCOUNTS
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS coupons (
+CREATE TABLE IF NOT EXISTS public.coupons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT UNIQUE NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('flat', 'percent')),
@@ -166,10 +190,10 @@ CREATE TABLE IF NOT EXISTS coupons (
 -- 6. ORDERS & ORDER ITEMS
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE IF NOT EXISTS public.orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number TEXT UNIQUE NOT NULL,
-  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
   customer_email TEXT NOT NULL,
@@ -182,7 +206,7 @@ CREATE TABLE IF NOT EXISTS orders (
   advance_paid NUMERIC(10, 2) NOT NULL DEFAULT 0,
   balance_due NUMERIC(10, 2) NOT NULL DEFAULT 0,
   status order_status DEFAULT 'Order Placed',
-  tracking_carrier TEXT DEFAULT 'Shiprocket Express',
+  tracking_carrier TEXT DEFAULT 'BlueDart Luxury Surface',
   tracking_awb TEXT,
   estimated_delivery TEXT,
   notes TEXT,
@@ -190,11 +214,11 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS order_items (
+CREATE TABLE IF NOT EXISTS public.order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  product_id UUID REFERENCES products(id) ON DELETE SET NULL,
-  variant_id UUID REFERENCES product_variants(id) ON DELETE SET NULL,
+  order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+  variant_id UUID REFERENCES public.product_variants(id) ON DELETE SET NULL,
   product_title TEXT NOT NULL,
   variant_size TEXT,
   swatch_name TEXT,
@@ -209,9 +233,9 @@ CREATE TABLE IF NOT EXISTS order_items (
 -- 7. PAYMENTS (Razorpay & Partial COD Doorstep Settlement)
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS payments (
+CREATE TABLE IF NOT EXISTS public.payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
   gateway payment_gateway DEFAULT 'razorpay',
   razorpay_order_id TEXT,
   razorpay_payment_id TEXT,
@@ -227,11 +251,11 @@ CREATE TABLE IF NOT EXISTS payments (
 -- 8. CART & WISHLIST PERSISTENCE
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS cart_items (
+CREATE TABLE IF NOT EXISTS public.cart_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  variant_id UUID REFERENCES product_variants(id) ON DELETE SET NULL,
+  customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  variant_id UUID REFERENCES public.product_variants(id) ON DELETE SET NULL,
   swatch_name TEXT,
   quantity INT NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -239,10 +263,10 @@ CREATE TABLE IF NOT EXISTS cart_items (
   UNIQUE(customer_id, product_id, variant_id, swatch_name)
 );
 
-CREATE TABLE IF NOT EXISTS wishlist_items (
+CREATE TABLE IF NOT EXISTS public.wishlist_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(customer_id, product_id)
 );
@@ -251,10 +275,10 @@ CREATE TABLE IF NOT EXISTS wishlist_items (
 -- 9. REVIEWS & RATINGS
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS reviews (
+CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
   customer_name TEXT NOT NULL,
   rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
   title TEXT,
@@ -269,7 +293,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 -- 10. B2B / HOSPITALITY LEADS (Bespoke Trade Inquiries)
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS leads (
+CREATE TABLE IF NOT EXISTS public.leads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   inquiry_number TEXT UNIQUE NOT NULL,
   contact_name TEXT NOT NULL,
@@ -297,27 +321,27 @@ CREATE TABLE IF NOT EXISTS leads (
 -- 11. CRM TICKETS & PATRON CARE INBOX
 -- ==============================================================================
 
-CREATE TABLE IF NOT EXISTS tickets (
+CREATE TABLE IF NOT EXISTS public.tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ticket_number TEXT UNIQUE NOT NULL,
-  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
-  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
+  order_id UUID REFERENCES public.orders(id) ON DELETE SET NULL,
   customer_name TEXT NOT NULL,
   customer_phone TEXT,
   customer_email TEXT,
   subject TEXT NOT NULL,
   priority ticket_priority DEFAULT 'medium',
   status ticket_status DEFAULT 'open',
-  assigned_to UUID REFERENCES customers(id) ON DELETE SET NULL,
+  assigned_to UUID REFERENCES public.customers(id) ON DELETE SET NULL,
   category TEXT DEFAULT 'dispatch',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS ticket_messages (
+CREATE TABLE IF NOT EXISTS public.ticket_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
-  sender_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  ticket_id UUID NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
+  sender_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
   sender_type TEXT NOT NULL CHECK (sender_type IN ('customer', 'staff', 'system')),
   message TEXT NOT NULL,
   attachments TEXT[],
@@ -325,200 +349,432 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
 );
 
 -- ==============================================================================
--- 12. ROW-LEVEL SECURITY (RLS) POLICIES
+-- 12. ABANDONED CHECKOUTS
 -- ==============================================================================
 
--- Enable RLS on all tables
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_swatches ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_images ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE addresses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE coupons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE wishlist_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ticket_messages ENABLE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS public.abandoned_checkouts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  customer_name TEXT,
+  cart_items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  total NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  recovery_status TEXT NOT NULL DEFAULT 'pending' CHECK (recovery_status IN ('pending', 'nudge_sent', 'recovered', 'lost')),
+  last_nudge_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Helper function to check if current authenticated user has staff or admin role
-CREATE OR REPLACE FUNCTION is_staff_or_admin()
+-- ==============================================================================
+-- 13. INVENTORY MOVEMENTS LEDGER
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.inventory_movements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  variant_id UUID REFERENCES public.product_variants(id) ON DELETE SET NULL,
+  movement_type TEXT NOT NULL CHECK (movement_type IN ('purchase_receipt', 'sale', 'return_restock', 'damage_writeoff', 'manual_adjustment')),
+  quantity_delta INT NOT NULL,
+  previous_stock INT NOT NULL DEFAULT 0,
+  new_stock INT NOT NULL DEFAULT 0,
+  reference_order_id UUID REFERENCES public.orders(id) ON DELETE SET NULL,
+  reason TEXT,
+  performed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 14. SITE SETTINGS & CONFIGURATION
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.site_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  key TEXT UNIQUE NOT NULL,
+  value JSONB NOT NULL,
+  description TEXT,
+  is_public BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 15. STAFF ROLES & OPERATIONAL RBAC
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.staff_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'sales', 'support', 'warehouse')),
+  full_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 16. SUPABASE STORAGE BUCKET CONFIGURATION
+-- ==============================================================================
+
+-- Create public product-images bucket
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'product-images',
+  'product-images',
+  TRUE,
+  10485760, -- 10MB per image
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/svg+xml']
+)
+ON CONFLICT (id) DO UPDATE SET public = TRUE;
+
+-- ==============================================================================
+-- 17. HELPER FUNCTIONS FOR RBAC & PERMISSIONS
+-- ==============================================================================
+
+-- Check if authenticated user is Master Admin
+CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM customers
-    WHERE id = auth.uid()
-      AND role IN ('staff', 'admin', 'weaver_coordinator')
+  RETURN (
+    auth.role() = 'service_role' OR
+    EXISTS (
+      SELECT 1 FROM public.staff_roles
+      WHERE user_id = auth.uid() AND role = 'admin'
+    )
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Public / Anonymous Catalog Access
+-- Check if authenticated user has any of the allowed staff roles
+CREATE OR REPLACE FUNCTION public.has_staff_role(VARIADIC allowed_roles TEXT[])
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN (
+    auth.role() = 'service_role' OR
+    EXISTS (
+      SELECT 1 FROM public.staff_roles
+      WHERE user_id = auth.uid()
+        AND (role = 'admin' OR role = ANY(allowed_roles))
+    )
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Check if authenticated user is general staff or admin
+CREATE OR REPLACE FUNCTION public.is_staff_or_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN (
+    auth.role() = 'service_role' OR
+    public.is_admin() OR
+    EXISTS (
+      SELECT 1 FROM public.staff_roles WHERE user_id = auth.uid()
+    ) OR
+    EXISTS (
+      SELECT 1 FROM public.customers
+      WHERE id = auth.uid() AND role IN ('staff', 'admin', 'weaver_coordinator')
+    )
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Get current staff role name
+CREATE OR REPLACE FUNCTION public.current_staff_role()
+RETURNS TEXT AS $$
+DECLARE
+  v_role TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.staff_roles WHERE user_id = auth.uid();
+  RETURN v_role;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==============================================================================
+-- 18. ROW-LEVEL SECURITY (RLS) POLICIES ON EVERY TABLE
+-- ==============================================================================
+
+-- Enable RLS across all 18 tables
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_swatches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cart_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wishlist_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ticket_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.abandoned_checkouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff_roles ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if re-running
+DO $$ DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname, tablename, schemaname FROM pg_policies WHERE schemaname = 'public') LOOP
+    EXECUTE 'DROP POLICY IF EXISTS "' || r.policyname || '" ON "' || r.schemaname || '"."' || r.tablename || '";';
+  END LOOP;
+END $$;
+
+-- 18.1 CATEGORIES
 CREATE POLICY "Public can view active categories"
-  ON categories FOR SELECT
-  USING (is_active = TRUE);
+  ON public.categories FOR SELECT
+  USING (is_active = TRUE OR public.has_staff_role('sales', 'warehouse'));
 
+CREATE POLICY "Admin and Sales can manage categories"
+  ON public.categories FOR ALL
+  USING (public.has_staff_role('sales'));
+
+-- 18.2 PRODUCTS & CATALOG ITEMS
 CREATE POLICY "Public can view active products"
-  ON products FOR SELECT
-  USING (is_active = TRUE);
+  ON public.products FOR SELECT
+  USING (is_active = TRUE OR public.has_staff_role('sales', 'warehouse', 'support'));
 
-CREATE POLICY "Public can view variants of active products"
-  ON product_variants FOR SELECT
-  USING (EXISTS (SELECT 1 FROM products WHERE products.id = product_variants.product_id AND products.is_active = TRUE));
+CREATE POLICY "Staff can manage products"
+  ON public.products FOR ALL
+  USING (public.has_staff_role('sales', 'warehouse'));
 
-CREATE POLICY "Public can view swatches of active products"
-  ON product_swatches FOR SELECT
-  USING (EXISTS (SELECT 1 FROM products WHERE products.id = product_swatches.product_id AND products.is_active = TRUE));
+CREATE POLICY "Public can view active product variants"
+  ON public.product_variants FOR SELECT
+  USING (EXISTS (SELECT 1 FROM public.products p WHERE p.id = product_variants.product_id AND (p.is_active = TRUE OR public.has_staff_role('sales', 'warehouse', 'support'))));
 
-CREATE POLICY "Public can view images of active products"
-  ON product_images FOR SELECT
-  USING (EXISTS (SELECT 1 FROM products WHERE products.id = product_images.product_id AND products.is_active = TRUE));
+CREATE POLICY "Warehouse and Admin can manage product variants"
+  ON public.product_variants FOR ALL
+  USING (public.has_staff_role('warehouse'));
 
-CREATE POLICY "Public can view approved reviews"
-  ON reviews FOR SELECT
-  USING (is_approved = TRUE);
+CREATE POLICY "Public can view swatches"
+  ON public.product_swatches FOR SELECT
+  USING (EXISTS (SELECT 1 FROM public.products p WHERE p.id = product_swatches.product_id AND (p.is_active = TRUE OR public.has_staff_role('sales', 'warehouse', 'support'))));
 
-CREATE POLICY "Public can view active coupons"
-  ON coupons FOR SELECT
-  USING (is_active = TRUE);
+CREATE POLICY "Staff can manage swatches"
+  ON public.product_swatches FOR ALL
+  USING (public.has_staff_role('sales', 'warehouse'));
 
--- Customer Profile Policies
-CREATE POLICY "Customers can view their own profile"
-  ON customers FOR SELECT
-  USING (auth.uid() = id OR is_staff_or_admin());
+CREATE POLICY "Public can view product images"
+  ON public.product_images FOR SELECT
+  USING (EXISTS (SELECT 1 FROM public.products p WHERE p.id = product_images.product_id AND (p.is_active = TRUE OR public.has_staff_role('sales', 'warehouse', 'support'))));
 
-CREATE POLICY "Customers can update their own profile"
-  ON customers FOR UPDATE
+CREATE POLICY "Staff can manage product images"
+  ON public.product_images FOR ALL
+  USING (public.has_staff_role('sales', 'warehouse'));
+
+-- 18.3 CUSTOMERS & ADDRESSES
+CREATE POLICY "Customers view own profile; Staff view by role"
+  ON public.customers FOR SELECT
+  USING (auth.uid() = id OR public.has_staff_role('sales', 'support'));
+
+CREATE POLICY "Customers update own profile"
+  ON public.customers FOR UPDATE
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
--- Customer Addresses
-CREATE POLICY "Customers can manage their own addresses"
-  ON addresses FOR ALL
-  USING (auth.uid() = customer_id);
-
--- Cart & Wishlist Policies
-CREATE POLICY "Customers can manage their own cart"
-  ON cart_items FOR ALL
-  USING (auth.uid() = customer_id);
-
-CREATE POLICY "Customers can manage their own wishlist"
-  ON wishlist_items FOR ALL
-  USING (auth.uid() = customer_id);
-
--- Orders & Items Policies
-CREATE POLICY "Customers can view their own orders"
-  ON orders FOR SELECT
-  USING (auth.uid() = customer_id OR is_staff_or_admin());
-
-CREATE POLICY "Authenticated users or guests can insert orders"
-  ON orders FOR INSERT
+CREATE POLICY "Service role and Admin can insert customers"
+  ON public.customers FOR INSERT
   WITH CHECK (TRUE);
 
-CREATE POLICY "Customers can view their own order items"
-  ON order_items FOR SELECT
+CREATE POLICY "Customers manage own addresses"
+  ON public.addresses FOR ALL
+  USING (auth.uid() = customer_id);
+
+CREATE POLICY "Staff can view customer addresses"
+  ON public.addresses FOR SELECT
+  USING (public.has_staff_role('sales', 'support', 'warehouse'));
+
+-- 18.4 CART & WISHLIST
+CREATE POLICY "Customers manage own cart"
+  ON public.cart_items FOR ALL
+  USING (auth.uid() = customer_id);
+
+CREATE POLICY "Customers manage own wishlist"
+  ON public.wishlist_items FOR ALL
+  USING (auth.uid() = customer_id);
+
+-- 18.5 ORDERS & ORDER ITEMS
+CREATE POLICY "Customers view own orders; Staff view by role"
+  ON public.orders FOR SELECT
+  USING (auth.uid() = customer_id OR public.has_staff_role('sales', 'support', 'warehouse'));
+
+CREATE POLICY "Anyone can insert pending order during checkout"
+  ON public.orders FOR INSERT
+  WITH CHECK (TRUE);
+
+CREATE POLICY "Staff can update orders"
+  ON public.orders FOR UPDATE
+  USING (public.has_staff_role('sales', 'support', 'warehouse'));
+
+CREATE POLICY "Customers view own order items"
+  ON public.order_items FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM orders
-      WHERE orders.id = order_items.order_id
-        AND (orders.customer_id = auth.uid() OR is_staff_or_admin())
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_items.order_id
+        AND (o.customer_id = auth.uid() OR public.has_staff_role('sales', 'support', 'warehouse'))
     )
   );
 
-CREATE POLICY "Anyone can insert order items"
-  ON order_items FOR INSERT
+CREATE POLICY "Anyone can insert order items during checkout"
+  ON public.order_items FOR INSERT
   WITH CHECK (TRUE);
 
--- Payments
-CREATE POLICY "Customers can view their order payments"
-  ON payments FOR SELECT
+-- 18.6 PAYMENTS
+CREATE POLICY "Customers view own payments; Staff view by role"
+  ON public.payments FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM orders
-      WHERE orders.id = payments.order_id
-        AND (orders.customer_id = auth.uid() OR is_staff_or_admin())
+      SELECT 1 FROM public.orders o
+      WHERE o.id = payments.order_id
+        AND (o.customer_id = auth.uid() OR public.has_staff_role('support'))
     )
   );
 
-CREATE POLICY "Anyone can insert payments during checkout"
-  ON payments FOR INSERT
+CREATE POLICY "Anyone can insert payment record on checkout completion"
+  ON public.payments FOR INSERT
   WITH CHECK (TRUE);
 
--- Customer Reviews
-CREATE POLICY "Customers can create reviews"
-  ON reviews FOR INSERT
+-- 18.7 COUPONS
+CREATE POLICY "Public can view active coupons"
+  ON public.coupons FOR SELECT
+  USING (is_active = TRUE OR public.has_staff_role('sales'));
+
+CREATE POLICY "Admin and Sales can manage coupons"
+  ON public.coupons FOR ALL
+  USING (public.has_staff_role('sales'));
+
+-- 18.8 REVIEWS
+CREATE POLICY "Public can view approved reviews"
+  ON public.reviews FOR SELECT
+  USING (is_approved = TRUE OR public.has_staff_role('support', 'sales'));
+
+CREATE POLICY "Authenticated patrons can submit reviews"
+  ON public.reviews FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);
 
--- Leads (B2B)
-CREATE POLICY "Anyone can create a trade lead"
-  ON leads FOR INSERT
+CREATE POLICY "Support and Admin can moderate reviews"
+  ON public.reviews FOR ALL
+  USING (public.has_staff_role('support'));
+
+-- 18.9 B2B LEADS
+CREATE POLICY "Anyone can submit a wholesale lead"
+  ON public.leads FOR INSERT
   WITH CHECK (TRUE);
 
-CREATE POLICY "Staff can view and manage leads"
-  ON leads FOR ALL
-  USING (is_staff_or_admin());
+CREATE POLICY "Admin and Sales can view and manage leads"
+  ON public.leads FOR ALL
+  USING (public.has_staff_role('sales'));
 
--- Tickets & Messages
-CREATE POLICY "Customers can view their own tickets"
-  ON tickets FOR SELECT
-  USING (auth.uid() = customer_id OR is_staff_or_admin());
+-- 18.10 CRM TICKETS & MESSAGES
+CREATE POLICY "Customers view own tickets; Support and Admin manage"
+  ON public.tickets FOR SELECT
+  USING (auth.uid() = customer_id OR public.has_staff_role('support'));
 
 CREATE POLICY "Customers can create support tickets"
-  ON tickets FOR INSERT
-  WITH CHECK (auth.uid() = customer_id);
+  ON public.tickets FOR INSERT
+  WITH CHECK (auth.uid() = customer_id OR auth.uid() IS NOT NULL);
 
-CREATE POLICY "Customers and staff can read ticket messages"
-  ON ticket_messages FOR SELECT
+CREATE POLICY "Support and Admin manage tickets"
+  ON public.tickets FOR UPDATE
+  USING (public.has_staff_role('support'));
+
+CREATE POLICY "Customers and Support view ticket messages"
+  ON public.ticket_messages FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM tickets
-      WHERE tickets.id = ticket_messages.ticket_id
-        AND (tickets.customer_id = auth.uid() OR is_staff_or_admin())
+      SELECT 1 FROM public.tickets t
+      WHERE t.id = ticket_messages.ticket_id
+        AND (t.customer_id = auth.uid() OR public.has_staff_role('support'))
     )
   );
 
-CREATE POLICY "Customers and staff can insert ticket messages"
-  ON ticket_messages FOR INSERT
+CREATE POLICY "Customers and Support insert ticket messages"
+  ON public.ticket_messages FOR INSERT
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM tickets
-      WHERE tickets.id = ticket_messages.ticket_id
-        AND (tickets.customer_id = auth.uid() OR is_staff_or_admin())
+      SELECT 1 FROM public.tickets t
+      WHERE t.id = ticket_messages.ticket_id
+        AND (t.customer_id = auth.uid() OR public.has_staff_role('support'))
     )
   );
 
--- Staff Full Management Policies
-CREATE POLICY "Staff can manage all catalog products"
-  ON products FOR ALL
-  USING (is_staff_or_admin());
+-- 18.11 ABANDONED CHECKOUTS
+CREATE POLICY "Customers view own abandoned checkouts"
+  ON public.abandoned_checkouts FOR SELECT
+  USING (auth.uid() = customer_id OR public.has_staff_role('sales'));
 
-CREATE POLICY "Staff can manage all product variants"
-  ON product_variants FOR ALL
-  USING (is_staff_or_admin());
+CREATE POLICY "Server and clients can log abandoned checkouts"
+  ON public.abandoned_checkouts FOR INSERT
+  WITH CHECK (TRUE);
 
-CREATE POLICY "Staff can manage all categories"
-  ON categories FOR ALL
-  USING (is_staff_or_admin());
+CREATE POLICY "Sales can manage and update recovery status"
+  ON public.abandoned_checkouts FOR ALL
+  USING (public.has_staff_role('sales'));
 
-CREATE POLICY "Staff can manage all orders"
-  ON orders FOR ALL
-  USING (is_staff_or_admin());
+-- 18.12 INVENTORY MOVEMENTS LEDGER
+CREATE POLICY "Admin and Warehouse can view inventory movements"
+  ON public.inventory_movements FOR SELECT
+  USING (public.has_staff_role('warehouse'));
 
-CREATE POLICY "Staff can manage tickets"
-  ON tickets FOR ALL
-  USING (is_staff_or_admin());
+CREATE POLICY "Admin and Warehouse can record inventory movements"
+  ON public.inventory_movements FOR INSERT
+  WITH CHECK (public.has_staff_role('warehouse') OR auth.role() = 'service_role');
+
+-- 18.13 SITE SETTINGS
+CREATE POLICY "Public can view public site settings"
+  ON public.site_settings FOR SELECT
+  USING (is_public = TRUE OR public.is_admin());
+
+CREATE POLICY "Admins can manage site settings"
+  ON public.site_settings FOR ALL
+  USING (public.is_admin());
+
+-- 18.14 STAFF ROLES
+CREATE POLICY "Staff can view their own role"
+  ON public.staff_roles FOR SELECT
+  USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "Admins can manage staff roles"
+  ON public.staff_roles FOR ALL
+  USING (public.is_admin());
+
+-- 18.15 STORAGE BUCKET POLICIES (product-images)
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Public Access for Product Images" ON storage.objects;
+  DROP POLICY IF EXISTS "Staff Upload Product Images" ON storage.objects;
+  DROP POLICY IF EXISTS "Staff Manage Product Images" ON storage.objects;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+CREATE POLICY "Public Access for Product Images"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'product-images');
+
+CREATE POLICY "Staff Upload Product Images"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'product-images' AND
+    (auth.role() = 'service_role' OR public.has_staff_role('warehouse', 'sales'))
+  );
+
+CREATE POLICY "Staff Manage Product Images"
+  ON storage.objects FOR ALL
+  USING (
+    bucket_id = 'product-images' AND
+    (auth.role() = 'service_role' OR public.is_admin())
+  );
 
 -- ==============================================================================
--- 13. AUTOMATED TRIGGERS
+-- 19. AUTOMATED TRIGGERS & TIMESTAMPS
 -- ==============================================================================
 
--- Function to handle new user signup from Supabase Auth
+-- Function to handle new customer signup from Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -532,18 +788,19 @@ BEGIN
     'Loom Patron',
     500 -- Welcome bonus points
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(EXCLUDED.full_name, customers.full_name);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger on auth.users table
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Trigger for updating updated_at timestamp
+-- Updated_at timestamp trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -552,62 +809,29 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_categories_timestamp ON categories;
 CREATE TRIGGER update_categories_timestamp BEFORE UPDATE ON categories FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_products_timestamp ON products;
 CREATE TRIGGER update_products_timestamp BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_customers_timestamp ON customers;
 CREATE TRIGGER update_customers_timestamp BEFORE UPDATE ON customers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_orders_timestamp ON orders;
 CREATE TRIGGER update_orders_timestamp BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_leads_timestamp ON leads;
 CREATE TRIGGER update_leads_timestamp BEFORE UPDATE ON leads FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_tickets_timestamp ON tickets;
 CREATE TRIGGER update_tickets_timestamp BEFORE UPDATE ON tickets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- ==============================================================================
--- 14. STAFF ROLES & OPERATIONAL RBAC
--- ==============================================================================
+DROP TRIGGER IF EXISTS update_abandoned_checkouts_timestamp ON abandoned_checkouts;
+CREATE TRIGGER update_abandoned_checkouts_timestamp BEFORE UPDATE ON abandoned_checkouts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TABLE IF NOT EXISTS public.staff_roles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL UNIQUE,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'sales', 'support', 'warehouse')),
-  full_name TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+DROP TRIGGER IF EXISTS update_site_settings_timestamp ON site_settings;
+CREATE TRIGGER update_site_settings_timestamp BEFORE UPDATE ON site_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Enable RLS
-ALTER TABLE public.staff_roles ENABLE ROW LEVEL SECURITY;
-
--- Helper to check if staff user is an admin
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.staff_roles
-    WHERE user_id = auth.uid() AND role = 'admin'
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Helper to get active staff role
-CREATE OR REPLACE FUNCTION public.current_staff_role()
-RETURNS TEXT AS $$
-DECLARE
-  v_role TEXT;
-BEGIN
-  SELECT role INTO v_role FROM public.staff_roles WHERE user_id = auth.uid();
-  RETURN v_role;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Policies for staff_roles
-CREATE POLICY "Staff can view their own role"
-  ON public.staff_roles FOR SELECT
-  USING (auth.uid() = user_id OR is_admin());
-
-CREATE POLICY "Admins can manage staff roles"
-  ON public.staff_roles FOR ALL
-  USING (is_admin());
-
-CREATE TRIGGER update_staff_roles_timestamp
-  BEFORE UPDATE ON public.staff_roles
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
+DROP TRIGGER IF EXISTS update_staff_roles_timestamp ON staff_roles;
+CREATE TRIGGER update_staff_roles_timestamp BEFORE UPDATE ON staff_roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

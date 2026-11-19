@@ -120,14 +120,64 @@ export async function createPendingOrder(
   // Persist to Supabase if available
   const supabase: any = getSupabaseAdminClient();
   let persistedId = generatedId;
+  let resolvedCustomerId: string | null = customer.id || null;
 
   if (supabase) {
     try {
+      // 1. Ensure customer record exists in customers table
+      if (customer.email) {
+        try {
+          const { data: existingCustomer } = await supabase
+            .from("customers")
+            .select("id")
+            .eq("email", customer.email.trim().toLowerCase())
+            .maybeSingle();
+
+          if (existingCustomer) {
+            resolvedCustomerId = existingCustomer.id;
+          } else if (customer.id) {
+            // Insert customer profile
+            await supabase.from("customers").insert({
+              id: customer.id,
+              full_name: customer.name,
+              email: customer.email.trim().toLowerCase(),
+              phone: customer.phone,
+              loyalty_tier: "Loom Patron",
+              loyalty_points: 100,
+            });
+            resolvedCustomerId = customer.id;
+          }
+        } catch (cErr: any) {
+          console.warn("[OrderService] Customer upsert notice:", cErr.message);
+        }
+      }
+
+      // 2. Persist address if customer is authenticated
+      if (resolvedCustomerId && shippingAddress.address_line1) {
+        try {
+          await supabase.from("addresses").insert({
+            customer_id: resolvedCustomerId,
+            label: "Sanctuary Delivery",
+            name: customer.name,
+            phone: customer.phone || "",
+            address_line1: shippingAddress.address_line1,
+            address_line2: shippingAddress.address_line2 || null,
+            city: shippingAddress.city || "Jaipur",
+            state: shippingAddress.state || "Rajasthan",
+            pincode: shippingAddress.pincode || "302001",
+            is_default: true,
+          });
+        } catch (addrErr: any) {
+          console.warn("[OrderService] Address insert notice:", addrErr.message);
+        }
+      }
+
+      // 3. Insert order
       const { data: newOrder, error } = await supabase
         .from("orders")
         .insert({
           order_number: orderNumber,
-          customer_id: customer.id || null,
+          customer_id: resolvedCustomerId,
           customer_name: customer.name,
           customer_phone: customer.phone || "",
           customer_email: customer.email,
@@ -153,7 +203,7 @@ export async function createPendingOrder(
         cachedRecord.id = persistedId;
         MEMORY_ORDERS.set(persistedId, cachedRecord);
 
-        // Insert order_items
+        // 4. Insert order_items
         if (financials.items.length > 0) {
           const itemRows = financials.items.map((item) => ({
             order_id: persistedId,
@@ -327,6 +377,43 @@ export async function confirmOrderPayment(
             .from("coupons")
             .update({ usage_count: (cData.usage_count || 0) + 1 })
             .eq("id", cData.id);
+        }
+      }
+
+      // Record Inventory Movements
+      const itemsToDeduct = order?.items || dbOrder?.order_items || [];
+      for (const item of itemsToDeduct) {
+        try {
+          const prodId = item.product_id || (item.productId && !item.productId.startsWith("prod-") ? item.productId : null);
+          if (prodId) {
+            await supabase.from("inventory_movements").insert({
+              product_id: prodId,
+              variant_id: item.variant_id || item.variantId || null,
+              movement_type: "sale",
+              quantity_delta: -(item.quantity || 1),
+              previous_stock: 20,
+              new_stock: Math.max(0, 20 - (item.quantity || 1)),
+              reference_order_id: targetId,
+              reason: `Artisanal sale confirmation #${resolvedOrderNumber}`,
+            });
+
+            if (item.variant_id) {
+              const { data: vData } = await supabase
+                .from("product_variants")
+                .select("stock_count")
+                .eq("id", item.variant_id)
+                .maybeSingle();
+
+              if (vData) {
+                await supabase
+                  .from("product_variants")
+                  .update({ stock_count: Math.max(0, (vData.stock_count || 20) - (item.quantity || 1)) })
+                  .eq("id", item.variant_id);
+              }
+            }
+          }
+        } catch (invErr: any) {
+          console.warn("[OrderService] Inventory movement notice:", invErr.message);
         }
       }
     } catch (e: any) {
