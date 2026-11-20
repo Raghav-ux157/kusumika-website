@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRazorpayClient, isRazorpayConfigured } from "@/lib/razorpay/client";
 import { calculateOrderFinancials } from "@/lib/pricing/orderCalculator";
 import { createPendingOrder } from "@/lib/orders/orderService";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, createRateLimitResponse } from "@/lib/security/rateLimit";
 
 export async function POST(req: NextRequest) {
@@ -127,6 +128,24 @@ export async function POST(req: NextRequest) {
       razorpayOrderId: rzpOrderId,
       notes: notes.special_instructions || null,
     });
+
+    // Record in abandoned_checkouts so concierges can recover uncompleted checkouts
+    const supabase = getSupabaseAdminClient();
+    if (supabase && customer.email) {
+      try {
+        await (supabase as any).from("abandoned_checkouts").insert({
+          email: customer.email,
+          phone: customer.phone || null,
+          customer_name: customer.name || "Prospective Patron",
+          cart_items: computedFinancials.items as any,
+          subtotal: computedFinancials.subtotal,
+          total: computedFinancials.total,
+          recovery_status: "pending",
+        });
+      } catch (abErr: any) {
+        console.warn("[Checkout] Abandoned cart log notice:", abErr.message);
+      }
+    }
 
     return NextResponse.json({
       id: rzpOrderId,

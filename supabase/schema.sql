@@ -136,7 +136,8 @@ CREATE TABLE IF NOT EXISTS public.product_images (
 -- ==============================================================================
 
 CREATE TABLE IF NOT EXISTS public.customers (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   full_name TEXT NOT NULL,
   phone TEXT,
   email TEXT NOT NULL,
@@ -144,7 +145,9 @@ CREATE TABLE IF NOT EXISTS public.customers (
   loyalty_points INT DEFAULT 0,
   loyalty_tier TEXT DEFAULT 'Loom Patron',
   role user_role DEFAULT 'customer',
+  segment TEXT DEFAULT 'organic_homeowner',
   whatsapp_opt_in BOOLEAN DEFAULT TRUE,
+  metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -205,6 +208,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
   payment_mode TEXT NOT NULL DEFAULT 'partial_cod',
   advance_paid NUMERIC(10, 2) NOT NULL DEFAULT 0,
   balance_due NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  cod_collected BOOLEAN DEFAULT FALSE,
+  cod_collection_method TEXT,
   status order_status DEFAULT 'Order Placed',
   tracking_carrier TEXT DEFAULT 'BlueDart Luxury Surface',
   tracking_awb TEXT,
@@ -835,3 +840,46 @@ CREATE TRIGGER update_site_settings_timestamp BEFORE UPDATE ON site_settings FOR
 
 DROP TRIGGER IF EXISTS update_staff_roles_timestamp ON staff_roles;
 CREATE TRIGGER update_staff_roles_timestamp BEFORE UPDATE ON staff_roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ==============================================================================
+-- 19. SUPABASE REALTIME REPLICATION CONFIGURATION
+-- ==============================================================================
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'orders'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'leads'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.leads;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'tickets'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.tickets;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'ticket_messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.ticket_messages;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'inventory_movements'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.inventory_movements;
+  END IF;
+END $$;
+

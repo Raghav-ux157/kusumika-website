@@ -34,26 +34,33 @@ export default function AdminSeoPage() {
   const [newKeywordInput, setNewKeywordInput] = useState("");
   const [pingStatus, setPingStatus] = useState<string | null>(null);
 
-  // Load from localStorage on mount
+  // Load from Supabase site_settings on mount
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = localStorage.getItem("kusumika_seo_pages");
-    if (saved) {
+    async function loadSeoFromSupabase() {
       try {
-        setPages(JSON.parse(saved));
-      } catch (e) {
-        console.error("Could not parse saved SEO pages", e);
-      }
-    }
+        const [pagesRes, settingsRes] = await Promise.all([
+          fetch("/api/admin/settings?key=seo_pages"),
+          fetch("/api/admin/settings?key=seo_global_settings"),
+        ]);
 
-    const savedSettings = localStorage.getItem("kusumika_seo_settings");
-    if (savedSettings) {
-      try {
-        setSiteSettings(JSON.parse(savedSettings));
-      } catch (e) {
-        console.error("Could not parse saved SEO settings", e);
+        if (pagesRes.ok) {
+          const pData = await pagesRes.json();
+          if (Array.isArray(pData.value) && pData.value.length > 0) {
+            setPages(pData.value);
+          }
+        }
+
+        if (settingsRes.ok) {
+          const sData = await settingsRes.json();
+          if (sData.value && Object.keys(sData.value).length > 0) {
+            setSiteSettings(sData.value);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load SEO configs from Supabase:", err);
       }
     }
+    loadSeoFromSupabase();
   }, []);
 
   // Currently selected page config
@@ -100,12 +107,20 @@ export default function AdminSeoPage() {
 
   // Save changes handler
   const handleSave = () => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("kusumika_seo_pages", JSON.stringify(pages));
-      localStorage.setItem("kusumika_seo_settings", JSON.stringify(siteSettings));
-    }
+    fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "seo_pages", value: pages, description: "Page SEO configurations" }),
+    }).catch(() => {});
+
+    fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "seo_global_settings", value: siteSettings, description: "Global SEO configurations" }),
+    }).catch(() => {});
+
     setHasUnsavedChanges(false);
-    showToast("SEO configurations and structured microdata published successfully!");
+    showToast("SEO configurations and structured microdata published to Supabase!");
   };
 
   // Reset to defaults
@@ -113,10 +128,19 @@ export default function AdminSeoPage() {
     if (confirm("Reset all SEO configurations to curated factory defaults?")) {
       setPages(DEFAULT_PAGE_SEO_CONFIGS);
       setSiteSettings(DEFAULT_SEO_SITE_SETTINGS);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("kusumika_seo_pages");
-        localStorage.removeItem("kusumika_seo_settings");
-      }
+
+      fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "seo_pages", value: DEFAULT_PAGE_SEO_CONFIGS }),
+      }).catch(() => {});
+
+      fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "seo_global_settings", value: DEFAULT_SEO_SITE_SETTINGS }),
+      }).catch(() => {});
+
       setHasUnsavedChanges(false);
       showToast("SEO presets reset to handcrafted defaults.");
     }

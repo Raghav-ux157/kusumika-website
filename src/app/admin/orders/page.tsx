@@ -16,7 +16,7 @@ const ORDER_STATUS_FLOW: AdminOrder["status"][] = [
 ];
 
 export default function AdminOrdersPage() {
-  const { orders, updateOrderStatus, markCodBalanceCollected, showToast } = useAdmin();
+  const { orders, isLoadingOrders, refreshOrders, updateOrderStatus, markCodBalanceCollected, showToast } = useAdmin();
   const [searchTerm, setSearchTerm] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -144,8 +144,18 @@ export default function AdminOrdersPage() {
           <span className="text-primary">All Orders & Doorstep Payments</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-on-surface-variant bg-surface-container-high px-3 py-1 rounded-full">
-          <span className="w-2 h-2 rounded-full bg-tertiary" />
-          <span>Synchronized with 3 Weaving Clusters: 2 mins ago</span>
+          <span className="w-2 h-2 rounded-full bg-tertiary animate-pulse" />
+          <span>Real-time Live Supabase Sync: Active</span>
+          <button
+            onClick={() => {
+              refreshOrders();
+              showToast("Refreshing orders from Supabase...");
+            }}
+            title="Refresh now"
+            className="ml-1 hover:text-primary transition-colors flex items-center"
+          >
+            <span className="material-symbols-outlined text-[14px]">refresh</span>
+          </button>
         </div>
       </div>
 

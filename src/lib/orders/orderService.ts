@@ -380,6 +380,18 @@ export async function confirmOrderPayment(
         }
       }
 
+      // Mark abandoned checkout as recovered if present
+      const cEmail = order?.customer_email || dbOrder?.customer_email;
+      if (cEmail) {
+        try {
+          await supabase
+            .from("abandoned_checkouts")
+            .update({ recovery_status: "recovered", updated_at: new Date().toISOString() })
+            .eq("email", cEmail.trim().toLowerCase())
+            .in("recovery_status", ["pending", "nudge_sent"]);
+        } catch {}
+      }
+
       // Record Inventory Movements
       const itemsToDeduct = order?.items || dbOrder?.order_items || [];
       for (const item of itemsToDeduct) {
@@ -455,3 +467,67 @@ export async function confirmOrderPayment(
     message: "Payment successfully verified and order confirmed.",
   };
 }
+
+/**
+ * Returns distinct cached memory orders formatted for Admin display
+ */
+export function getMemoryOrdersList(): any[] {
+  const seenNumbers = new Set<string>();
+  const list: any[] = [];
+
+  MEMORY_ORDERS.forEach((o) => {
+    if (!seenNumbers.has(o.order_number)) {
+      seenNumbers.add(o.order_number);
+      list.push({
+        id: o.id,
+        order_number: o.order_number,
+        customer_name: o.customer_name,
+        customer_phone: o.customer_phone,
+        customer_email: o.customer_email,
+        shipping_address: o.shipping_address,
+        items: o.items.map((i: any) => ({
+          product_title: i.productTitle || i.product_title || "Artisanal Linen",
+          variant_size: i.variantSize || i.variant_size || "Standard",
+          swatch_name: i.swatchName || i.swatch_name || "Terracotta",
+          quantity: i.quantity || 1,
+          price: i.price || 0,
+          total: i.total || 0,
+          cluster: "Sanganer Hand-Block",
+        })),
+        subtotal: o.subtotal,
+        discount: o.discount,
+        shipping_fee: o.shipping_fee,
+        total: o.total,
+        payment_mode: o.payment_mode,
+        advance_paid: o.advance_paid,
+        balance_due: o.balance_due,
+        cod_collected: (o as any).cod_collected || false,
+        cod_collection_method: (o as any).cod_collection_method || null,
+        status: o.status,
+        tracking_carrier: o.tracking_carrier,
+        tracking_awb: o.tracking_awb,
+        estimated_delivery: o.estimated_delivery,
+        cluster: "Sanganer Hand-Block",
+        created_at: o.created_at,
+        notes: (o as any).notes || null,
+      });
+    }
+  });
+
+  return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+/**
+ * Marks a memory order as COD balance collected
+ */
+export function markMemoryOrderCodCollected(orderNumberOrId: string, method: "cash" | "upi") {
+  const order = MEMORY_ORDERS.get(orderNumberOrId);
+  if (order) {
+    (order as any).cod_collected = true;
+    (order as any).cod_collection_method = method;
+    order.balance_due = 0;
+    order.status = "Delivered";
+    order.updated_at = new Date().toISOString();
+  }
+}
+

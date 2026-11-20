@@ -214,6 +214,7 @@ export interface Database {
       customers: {
         Row: {
           id: string;
+          auth_user_id: string | null;
           full_name: string;
           phone: string | null;
           email: string;
@@ -221,12 +222,15 @@ export interface Database {
           loyalty_points: number;
           loyalty_tier: string;
           role: "customer" | "staff" | "admin" | "weaver_coordinator";
+          segment: string;
           whatsapp_opt_in: boolean;
+          metadata: Json;
           created_at: string;
           updated_at: string;
         };
         Insert: {
-          id: string;
+          id?: string;
+          auth_user_id?: string | null;
           full_name: string;
           phone?: string | null;
           email: string;
@@ -234,12 +238,15 @@ export interface Database {
           loyalty_points?: number;
           loyalty_tier?: string;
           role?: "customer" | "staff" | "admin" | "weaver_coordinator";
+          segment?: string;
           whatsapp_opt_in?: boolean;
+          metadata?: Json;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
+          auth_user_id?: string | null;
           full_name?: string;
           phone?: string | null;
           email?: string;
@@ -247,7 +254,9 @@ export interface Database {
           loyalty_points?: number;
           loyalty_tier?: string;
           role?: "customer" | "staff" | "admin" | "weaver_coordinator";
+          segment?: string;
           whatsapp_opt_in?: boolean;
+          metadata?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -318,6 +327,8 @@ export interface Database {
           payment_mode: string;
           advance_paid: number;
           balance_due: number;
+          cod_collected: boolean;
+          cod_collection_method: string | null;
           status: string;
           tracking_carrier: string;
           tracking_awb: string | null;
@@ -341,6 +352,8 @@ export interface Database {
           payment_mode?: string;
           advance_paid?: number;
           balance_due?: number;
+          cod_collected?: boolean;
+          cod_collection_method?: string | null;
           status?: string;
           tracking_carrier?: string;
           tracking_awb?: string | null;
@@ -364,6 +377,8 @@ export interface Database {
           payment_mode?: string;
           advance_paid?: number;
           balance_due?: number;
+          cod_collected?: boolean;
+          cod_collection_method?: string | null;
           status?: string;
           tracking_carrier?: string;
           tracking_awb?: string | null;

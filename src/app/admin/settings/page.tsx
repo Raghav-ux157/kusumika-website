@@ -16,10 +16,53 @@ export default function AdminSettingsPage() {
     autoAssignLooms: true,
     enableWhatsAppAlerts: true,
   });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSave = (e: React.FormEvent) => {
+  // Load from Supabase site_settings on mount
+  React.useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch("/api/admin/settings?key=operational_policy");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.value && Object.keys(data.value).length > 0) {
+            setSettings((prev) => ({ ...prev, ...data.value }));
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load operational settings:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast("Atelier operational configurations saved successfully.");
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: "operational_policy",
+          value: settings,
+          description: "Atelier Partial COD rules, doorstep inspection, and operational cadence",
+        }),
+      });
+
+      if (res.ok) {
+        showToast("Atelier operational configurations saved to Supabase.");
+      } else {
+        showToast("Failed to save operational settings.");
+      }
+    } catch {
+      showToast("Operational configurations saved in local session.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

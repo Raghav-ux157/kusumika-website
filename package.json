@@ -9,8 +9,10 @@
     "lint": "next lint",
     "seed:admin": "node scripts/seed-admin.mjs",
     "seed:catalog": "node scripts/seed-catalog.mjs",
+    "seed:demo": "node scripts/seed-demo-data.mjs",
     "test:auth": "node scripts/test-phase7a.mjs",
-    "test:security": "node scripts/test-phase7b.mjs"
+    "test:security": "node scripts/test-phase7b.mjs",
+    "test:realtime": "node scripts/test-phase7d.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

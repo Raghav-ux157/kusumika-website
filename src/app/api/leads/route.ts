@@ -126,3 +126,49 @@ export async function GET() {
     );
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { leadId, status, notes } = body;
+
+    if (!leadId || !status) {
+      return NextResponse.json(
+        { error: "Lead ID and status are required." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabaseAdminClient();
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    if (notes !== undefined) updateData.notes = notes;
+
+    if (supabase) {
+      const { data, error } = await (supabase as any)
+        .from("leads")
+        .update(updateData)
+        .or(`id.eq.${leadId},inquiry_number.eq.${leadId}`)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, lead: data });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Lead updated in simulation.",
+      lead: { id: leadId, ...updateData },
+    });
+  } catch (error: any) {
+    console.error("[Leads PATCH Error]:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to update lead." },
+      { status: 500 }
+    );
+  }
+}
+
